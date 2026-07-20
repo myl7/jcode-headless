@@ -2001,8 +2001,9 @@ fn anthropic_recommended_model_from_error(error_str: &str) -> Option<String> {
         .split("please use")
         .nth(1)
         .or_else(|| error_str.split("use ").nth(1))?;
-    // Take up to the next sentence boundary.
-    let hint = hint.split(['.', '!', '\n']).next().unwrap_or(hint).trim();
+    // Do not split on `.` because model versions use it as a separator (for
+    // example `Opus 4.8`). Bound the token scan below instead.
+    let hint = hint.split(['!', '\n']).next().unwrap_or(hint).trim();
     if hint.is_empty() {
         return None;
     }
@@ -2011,6 +2012,7 @@ fn anthropic_recommended_model_from_error(error_str: &str) -> Option<String> {
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|t| !t.is_empty())
         .map(|t| t.to_ascii_lowercase())
+        .take(5)
         .collect();
     if hint_tokens.is_empty() {
         return None;
@@ -2021,18 +2023,27 @@ fn anthropic_recommended_model_from_error(error_str: &str) -> Option<String> {
         .filter(|candidate| !anthropic_model_is_retired(candidate))
         .map(|candidate| {
             let key = AnthropicProvider::normalized_model_key(&candidate);
+            let candidate_tokens = key
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .filter(|token| !token.is_empty())
+                .collect::<Vec<_>>();
             // The catalog id uses hyphenated digits ("claude-opus-4-8"), so the
             // hint tokens ["opus","4","8"] should all appear.
             let score = hint_tokens
                 .iter()
-                .filter(|token| key.contains(token.as_str()))
+                .filter(|token| candidate_tokens.contains(&token.as_str()))
                 .count();
             (candidate, score)
         })
         // Require at least the family word plus one version digit to match so we
         // do not pick an arbitrary model from a single shared token.
         .filter(|(_, score)| *score >= 2)
-        .max_by_key(|(_, score)| *score)
+        .min_by_key(|(candidate, score)| {
+            (
+                std::cmp::Reverse(*score),
+                anthropic_model_quality_rank(candidate),
+            )
+        })
         .map(|(candidate, _)| candidate)
 }
 

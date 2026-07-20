@@ -39,7 +39,7 @@ fn save_claude_tokens_preserves_existing_account_metadata() -> Result<()> {
     let _lock = crate::storage::lock_test_env();
     let temp = tempfile::tempdir()?;
     let _home = EnvVarGuard::set("JCODE_HOME", temp.path());
-    crate::auth::claude::upsert_account(crate::auth::claude::AnthropicAccount {
+    let label = crate::auth::claude::upsert_account(crate::auth::claude::AnthropicAccount {
         label: "default".to_string(),
         access: "old".to_string(),
         refresh: "old-refresh".to_string(),
@@ -57,12 +57,12 @@ fn save_claude_tokens_preserves_existing_account_metadata() -> Result<()> {
             id_token: None,
             scopes: Vec::new(),
         },
-        "default",
+        &label,
     )?;
 
     let account = crate::auth::claude::list_accounts()?
         .into_iter()
-        .find(|account| account.label == "default")
+        .find(|account| account.label == label)
         .expect("saved account");
     assert_eq!(account.email.as_deref(), Some("person@example.com"));
     assert_eq!(account.subscription_type.as_deref(), Some("max"));

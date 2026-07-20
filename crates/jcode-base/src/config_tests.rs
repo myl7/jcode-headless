@@ -395,7 +395,7 @@ fn test_generated_default_config_uses_low_openai_reasoning_effort() {
         "generated default config should document ACP profile settings"
     );
     assert!(
-        content.contains("[agents]") && content.contains("swarm_spawn_mode = \"inline\""),
+        content.contains("[agents]") && content.contains("swarm_spawn_mode = \"headless\""),
         "generated default config should document the headless agent spawn default"
     );
     assert!(

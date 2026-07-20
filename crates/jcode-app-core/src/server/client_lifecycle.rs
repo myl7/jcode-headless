@@ -1,8 +1,7 @@
 use super::client_actions::{
     AgentTaskContext, NotifySessionContext, handle_agent_task, handle_compact, handle_input_shell,
     handle_notify_session, handle_rename_session, handle_run_subagent, handle_set_feature,
-    handle_set_subagent_model, handle_split, handle_stdin_response, handle_transfer,
-    handle_trigger_memory_extraction,
+    handle_set_subagent_model, handle_split, handle_transfer, handle_trigger_memory_extraction,
 };
 use super::client_comm::{
     handle_comm_channel_members, handle_comm_list, handle_comm_list_channels, handle_comm_message,
@@ -626,40 +625,9 @@ pub(super) async fn handle_client(
         }
     }
 
-    let stdin_responses: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<String>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
     // Subscribe to bus events so we can forward ModelsUpdated to this client
     // (e.g. when Copilot finishes async init after the initial History was sent)
     let mut bus_rx = Bus::global().subscribe();
-
-    // Set up stdin request forwarding: tools send StdinInputRequest, we forward to TUI
-    let (stdin_req_tx, mut stdin_req_rx) =
-        tokio::sync::mpsc::unbounded_channel::<crate::tool::StdinInputRequest>();
-    {
-        let mut agent_guard = agent.lock().await;
-        agent_guard.set_stdin_request_tx(stdin_req_tx);
-    }
-    let _stdin_forwarder = {
-        let client_event_tx = client_event_tx.clone();
-        let stdin_responses = stdin_responses.clone();
-        let tool_call_id = String::new();
-        tokio::spawn(async move {
-            while let Some(req) = stdin_req_rx.recv().await {
-                let request_id = req.request_id.clone();
-                stdin_responses
-                    .lock()
-                    .await
-                    .insert(request_id.clone(), req.response_tx);
-                let _ = client_event_tx.send(ServerEvent::StdinRequest {
-                    request_id,
-                    prompt: req.prompt,
-                    is_password: req.is_password,
-                    tool_call_id: tool_call_id.clone(),
-                });
-            }
-        })
-    };
 
     // Do not drain global bus traffic until the client has completed its first
     // subscribe. Under heavy swarm file-activity load, ignored bus frames can
@@ -1885,13 +1853,10 @@ pub(super) async fn handle_client(
                 let _ = client_event_tx.send(ServerEvent::Done { id });
             }
 
-            Request::StdinResponse {
-                id,
-                request_id,
-                input,
-            } => {
-                handle_stdin_response(id, request_id, input, &stdin_responses, &client_event_tx)
-                    .await;
+            Request::StdinResponse { id, .. } => {
+                // Kept as a wire-compatible no-op for older clients. Headless
+                // sessions never issue stdin requests.
+                let _ = client_event_tx.send(ServerEvent::Done { id });
             }
 
             Request::AgentTask { id, task, .. } => {

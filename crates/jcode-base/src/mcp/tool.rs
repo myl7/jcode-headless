@@ -52,9 +52,8 @@ impl Tool for McpTool {
         } else {
             input
         };
-        // `intent` is a jcode-injected display-only parameter (see
-        // ensure_intent_in_schema). Strip it before forwarding unless the
-        // MCP server's own schema declares an `intent` property.
+        // `intent` is jcode display-only metadata. Strip it before forwarding
+        // unless the MCP server's own schema declares an `intent` property.
         let server_declares_intent = self
             .tool_def
             .input_schema

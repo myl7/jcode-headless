@@ -49,94 +49,25 @@ async fn test_basic_command_with_unused_stdin_channel() {
 }
 
 #[tokio::test]
-async fn test_stdin_forwarding_single_line() {
-    let (tx, mut rx) = mpsc::unbounded_channel::<StdinInputRequest>();
+async fn test_headless_agent_command_sees_closed_stdin() {
     let tool = BashTool::new();
+    let signal = jcode_agent_runtime::InterruptSignal::new();
+    let ctx = make_agent_ctx(signal);
 
-    // "head -n1" reads one line from stdin and prints it
-    let input = json!({"command": "head -n1", "timeout": 10000});
-    let ctx = make_ctx(Some(tx));
-
-    // Spawn the tool execution
-    let tool_handle = tokio::spawn(async move { tool.execute(input, ctx).await });
-
-    // Wait for the stdin request to arrive
-    let req = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
-        .await
-        .expect("timed out waiting for stdin request")
-        .expect("channel closed");
-
-    assert!(req.request_id.starts_with("stdin-test-call-"));
-    assert!(!req.is_password);
-
-    // Send the response
-    req.response_tx.send("test_input_line".to_string()).unwrap();
-
-    // Wait for tool to finish
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), tool_handle)
-        .await
-        .expect("tool timed out")
-        .expect("tool panicked")
-        .expect("tool errored");
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        tool.execute(json!({"command": "head -n1", "timeout": 10000}), ctx),
+    )
+    .await
+    .expect("headless command must not wait for interactive stdin")
+    .expect("headless command should exit cleanly");
 
     assert!(
-        result.output.contains("test_input_line"),
-        "output should contain the input we sent: {}",
+        result.output.contains("Command finished with exit code: 0"),
+        "headless command did not exit cleanly: {}",
         result.output
     );
-}
-
-#[tokio::test]
-async fn test_stdin_forwarding_multiple_lines() {
-    let (tx, mut rx) = mpsc::unbounded_channel::<StdinInputRequest>();
-    let tool = BashTool::new();
-
-    // "head -n2" reads two lines
-    let input = json!({"command": "head -n2", "timeout": 15000});
-    let ctx = make_ctx(Some(tx));
-
-    let tool_handle = tokio::spawn(async move { tool.execute(input, ctx).await });
-
-    // First line
-    let req1 = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
-        .await
-        .expect("timed out waiting for first stdin request")
-        .expect("channel closed");
-    assert!(
-        req1.request_id.ends_with("-1"),
-        "first request should end with -1: {}",
-        req1.request_id
-    );
-    req1.response_tx.send("line_one".to_string()).unwrap();
-
-    // Second line
-    let req2 = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
-        .await
-        .expect("timed out waiting for second stdin request")
-        .expect("channel closed");
-    assert!(
-        req2.request_id.ends_with("-2"),
-        "second request should end with -2: {}",
-        req2.request_id
-    );
-    req2.response_tx.send("line_two".to_string()).unwrap();
-
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), tool_handle)
-        .await
-        .expect("tool timed out")
-        .expect("tool panicked")
-        .expect("tool errored");
-
-    assert!(
-        result.output.contains("line_one"),
-        "missing line_one in: {}",
-        result.output
-    );
-    assert!(
-        result.output.contains("line_two"),
-        "missing line_two in: {}",
-        result.output
-    );
+    assert!(!result.output.contains("continuing in background"));
 }
 
 #[tokio::test]

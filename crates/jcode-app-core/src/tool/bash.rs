@@ -575,6 +575,7 @@ mod utf8_truncation_tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn build_shell_command_uses_disk_backed_scratch_directory() {
+        let _guard = crate::storage::lock_test_env();
         let expected = super::tool_scratch_dir().expect("jcode scratch directory");
         let output = build_shell_command("printf '%s\\n%s\\n' \"$TMPDIR\" \"$JCODE_SCRATCH_DIR\"")
             .output()

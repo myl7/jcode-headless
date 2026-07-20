@@ -1,8 +1,27 @@
 use super::*;
 use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 fn lock_env() -> std::sync::MutexGuard<'static, ()> {
     crate::storage::lock_test_env()
+}
+
+struct CurrentDirGuard {
+    original: PathBuf,
+}
+
+impl CurrentDirGuard {
+    fn set(path: &Path) -> anyhow::Result<Self> {
+        let original = std::env::current_dir()?;
+        std::env::set_current_dir(path)?;
+        Ok(Self { original })
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.original);
+    }
 }
 
 struct EnvVarGuard {

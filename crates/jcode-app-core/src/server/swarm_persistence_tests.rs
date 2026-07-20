@@ -792,7 +792,10 @@ fn legacy_snapshot_without_mode_defaults_to_light() {
             "version": 2,
             "participants": ["session-1"]
         },
-        "updated_at_unix_ms": 1u64
+        // Keep the compatibility fixture fresh. A timestamp of `1` is
+        // intentionally pruned by dormant-plan retention before migration is
+        // inspected.
+        "updated_at_unix_ms": now_unix_ms()
     });
     std::fs::create_dir_all(state_dir()).expect("state dir");
     std::fs::write(

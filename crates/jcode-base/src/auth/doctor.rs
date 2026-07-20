@@ -248,7 +248,7 @@ mod tests {
                 None,
             )
             .iter()
-            .any(|line| line.contains("Replace the stale OAuth account/token"))
+            .any(|line| line.contains("Replace or re-import the stale OAuth account/token"))
         );
     }
 
