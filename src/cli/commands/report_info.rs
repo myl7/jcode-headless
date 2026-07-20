@@ -340,7 +340,7 @@ async fn run_auth_doctor_validation(
 ) -> String {
     match tokio::time::timeout(
         Duration::from_secs(AUTH_DOCTOR_VALIDATION_TIMEOUT_SECS),
-        super::super::auth_test::run_post_login_validation_quiet(provider),
+        super::super::auth_test::run_credential_validation_quiet(provider),
     )
     .await
     {
@@ -459,8 +459,15 @@ pub(super) async fn run_usage_command(emit_json: bool) -> Result<()> {
         println!("No connected providers");
         println!();
         println!("Next steps:");
-        println!("- Use `jcode login --provider claude` to connect Claude OAuth.");
-        println!("- Use `jcode login --provider openai` to connect ChatGPT / Codex OAuth.");
+        println!(
+            "- Import an existing Claude subscription credential with `jcode auth import claude`."
+        );
+        println!(
+            "- Import an existing OpenAI subscription credential with `jcode auth import openai`."
+        );
+        println!(
+            "- Or provide an API key through the provider environment variable or config file."
+        );
         return Ok(());
     }
 
@@ -689,25 +696,19 @@ mod tests {
                 .recommended_actions
                 .iter()
                 .any(|line| {
-                    line == &format!("Connect it: jcode login --provider {}", provider.id)
+                    line == &format!(
+                        "Provision credentials in the writable JCODE_HOME volume for {}.",
+                        provider.id
+                    )
                 })
         );
 
-        crate::cli::login::run_login(
-            &crate::cli::provider_init::ProviderChoice::Cerebras,
-            None,
-            crate::cli::login::LoginOptions {
-                no_validate: true,
-                openai_compatible_api_key: Some("test-cerebras-cli-key".to_string()),
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("CLI login should save Cerebras key in sandbox");
+        std::fs::write(&env_file, "CEREBRAS_API_KEY=test-cerebras-cli-key\n")
+            .expect("write provider credential fixture");
 
         assert!(
             env_file.exists(),
-            "CLI login should create provider env file"
+            "provider configuration should create provider env file"
         );
         assert_eq!(
             crate::provider_catalog::load_api_key_from_env_or_config(

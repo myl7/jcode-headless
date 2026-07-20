@@ -114,7 +114,7 @@ Task instruction follows:
 
 
 def _benchmark_instruction_preamble() -> str:
-    # Keep Harbor runs aligned with normal TUI/jcode-run prompting by default.
+    # Keep Harbor runs aligned with normal headless jcode-run prompting by default.
     # The legacy preamble can still be enabled explicitly for reproducing older
     # runs, but new benchmark runs should rely on jcode's normal system prompt
     # and the official Terminal-Bench task instruction.

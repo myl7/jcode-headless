@@ -383,31 +383,18 @@ export -f cargo
                             &repo_dir,
                             &source_after_build,
                         )?;
-                        let published = if Self::build_command_is_desktop_only(&command) {
-                            Self::validate_desktop_selfdev_binary(&repo_dir, &source_after_build)?;
-                            None
-                        } else {
-                            let published = build::publish_local_current_build_for_source(
-                                &repo_dir,
-                                &source_after_build,
-                            )?;
-                            let mut manifest = build::BuildManifest::load()?;
-                            manifest.add_to_history(build::current_build_info(&repo_dir)?)?;
-                            Some(published)
-                        };
+                        let published = build::publish_local_current_build_for_source(
+                            &repo_dir,
+                            &source_after_build,
+                        )?;
+                        let mut manifest = build::BuildManifest::load()?;
+                        manifest.add_to_history(build::current_build_info(&repo_dir)?)?;
                         let mut request = BuildRequest::load(&request_id)?.ok_or_else(|| {
                             anyhow::anyhow!("Missing queued build request {}", request_id)
                         })?;
-                        request.published_version = published
-                            .as_ref()
-                            .map(|published| published.version.clone())
-                            .or_else(|| Some(source_after_build.version_label.clone()));
+                        request.published_version = Some(published.version.clone());
                         request.validated = true;
-                        request.last_progress = Some(if published.is_some() {
-                            "published and smoke-tested".to_string()
-                        } else {
-                            "desktop binary built and smoke-tested".to_string()
-                        });
+                        request.last_progress = Some("published and smoke-tested".to_string());
                         request.save()?;
                         result
                     }
@@ -460,53 +447,9 @@ export -f cargo
         Ok(result)
     }
 
-    fn build_command_is_desktop_only(command: &SelfDevBuildCommand) -> bool {
-        command.display.contains("-p jcode-desktop") && !command.display.contains("-p jcode ")
-    }
-
-    fn validate_desktop_selfdev_binary(repo_dir: &Path, source: &build::SourceState) -> Result<()> {
-        let binary_name = if cfg!(windows) {
-            "jcode-desktop.exe"
-        } else {
-            "jcode-desktop"
-        };
-        let binary = repo_dir
-            .join("target")
-            .join(build::SELFDEV_CARGO_PROFILE)
-            .join(binary_name);
-        if !binary.exists() {
-            anyhow::bail!("Desktop binary not found at {}", binary.display());
-        }
-
-        let output = std::process::Command::new(&binary)
-            .arg("--version")
-            .env("JCODE_NON_INTERACTIVE", "1")
-            .output()?;
-        if !output.status.success() {
-            anyhow::bail!(
-                "Desktop binary smoke test failed for {} with exit code {:?}: {}",
-                binary.display(),
-                output.status.code(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if !stdout.contains(&source.short_hash) {
-            anyhow::bail!(
-                "Refusing to validate desktop build {} as {}: --version output did not contain git hash {}: {}",
-                binary.display(),
-                source.version_label,
-                source.short_hash,
-                stdout.trim()
-            );
-        }
-        Ok(())
-    }
-
     pub(super) async fn do_build(
         &self,
         reason: Option<String>,
-        target: Option<String>,
         notify: Option<bool>,
         wake: Option<bool>,
         ctx: &ToolContext,
@@ -525,8 +468,7 @@ export -f cargo
             })?;
 
         let requested_source = SelfDevTool::requested_source_state(&repo_dir)?;
-        let target = build::SelfDevBuildTarget::parse(target.as_deref())?;
-        let command = SelfDevTool::build_command(&repo_dir, target);
+        let command = SelfDevTool::build_command(&repo_dir);
         let dedupe_key = SelfDevTool::build_dedupe_key(&requested_source, &command);
         let blocker = SelfDevTool::newest_active_request(&requested_source.worktree_scope)?;
         let duplicate =
@@ -759,16 +701,13 @@ export -f cargo
     pub(super) async fn do_build_reload(
         &self,
         reason: Option<String>,
-        target: Option<String>,
         context: Option<String>,
         ctx: &ToolContext,
     ) -> Result<ToolOutput> {
         // Queue the build. Disable per-task notify/wake delivery: this action
         // waits inline for completion, so a separate completion notification
         // would be redundant noise.
-        let build_output = self
-            .do_build(reason, target, Some(false), Some(false), ctx)
-            .await?;
+        let build_output = self.do_build(reason, Some(false), Some(false), ctx).await?;
 
         let metadata = build_output.metadata.clone().unwrap_or_else(|| json!({}));
         let task_id = metadata

@@ -62,7 +62,7 @@ pub async fn run_provider_doctor_command(
         .with_context(|| {
             format!(
                 "no API key found for `{provider}` (looked in env `{}` and `{}`). \
-                 Run `jcode login --provider {provider}`, or use `--tier offline` to check wiring only.",
+                 Inject the API key, or use `--tier offline` to check wiring only.",
                 resolved.api_key_env, resolved.env_file
             )
         })?;
@@ -176,7 +176,7 @@ fn next_step_hint(checkpoint: &str) -> String {
     use crate::live_tests::checkpoints as cp;
     let hint = match checkpoint {
         cp::AUTH_CREDENTIAL_LOADED => {
-            "  Next: run `jcode login --provider <provider>` to store a working credential."
+            "  Next: provision a working credential in the writable JCODE_HOME volume."
         }
         cp::MODEL_CATALOG_LIVE_ENDPOINT => {
             "  Next: the live /models call failed. Check the key, network, and provider status."
@@ -185,7 +185,7 @@ fn next_step_hint(checkpoint: &str) -> String {
         | cp::PICKER_LIVE_MODELS
         | cp::PICKER_FALLBACK_LABELING
         | cp::MODEL_SWITCH_ROUTE => {
-            "  Next: this is a jcode-side routing/picker bug for this provider. \
+            "  Next: this is a jcode-side catalog/routing bug for this provider. \
              Please file an issue with this output."
         }
         cp::NON_STREAMING_CHAT_COMPLETION | cp::STREAMING_CHAT_COMPLETION => {

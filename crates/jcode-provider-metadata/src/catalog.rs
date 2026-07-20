@@ -468,7 +468,7 @@ pub const CLAUDE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "requires Claude Pro or Max subscription",
     recommended: true,
     target: LoginProviderTarget::Claude,
-    order: LoginProviderSurfaceOrder::new(Some(1), Some(1), Some(1), Some(1), Some(1)),
+    order: LoginProviderSurfaceOrder::new(Some(1), Some(1), Some(1), Some(1)),
 };
 
 pub const ANTHROPIC_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -481,7 +481,7 @@ pub const ANTHROPIC_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderD
     menu_detail: "direct Anthropic Messages API",
     recommended: false,
     target: LoginProviderTarget::ClaudeApiKey,
-    order: LoginProviderSurfaceOrder::new(Some(2), Some(2), Some(2), Some(2), Some(2)),
+    order: LoginProviderSurfaceOrder::new(Some(2), Some(2), Some(2), Some(2)),
 };
 
 pub const AUTO_IMPORT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -494,7 +494,7 @@ pub const AUTO_IMPORT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDes
     menu_detail: "review and reuse logins from other tools",
     recommended: false,
     target: LoginProviderTarget::AutoImport,
-    order: LoginProviderSurfaceOrder::new(Some(1), Some(1), None, None, None),
+    order: LoginProviderSurfaceOrder::new(Some(1), None, None, None),
 };
 
 pub const JCODE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -507,7 +507,7 @@ pub const JCODE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescripto
     menu_detail: "curated jcode subscription models",
     recommended: false,
     target: LoginProviderTarget::Jcode,
-    order: LoginProviderSurfaceOrder::new(Some(3), Some(3), Some(3), Some(3), Some(3)),
+    order: LoginProviderSurfaceOrder::new(Some(3), Some(3), Some(3), Some(3)),
 };
 
 pub const OPENAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -520,7 +520,7 @@ pub const OPENAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "requires ChatGPT Plus or Pro subscription",
     recommended: true,
     target: LoginProviderTarget::OpenAi,
-    order: LoginProviderSurfaceOrder::new(Some(2), Some(2), Some(2), Some(2), Some(2)),
+    order: LoginProviderSurfaceOrder::new(Some(2), Some(2), Some(2), Some(2)),
 };
 
 pub const OPENAI_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -538,7 +538,7 @@ pub const OPENAI_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDesc
     menu_detail: "native OpenAI API key, pay-per-token",
     recommended: false,
     target: LoginProviderTarget::OpenAiApiKey,
-    order: LoginProviderSurfaceOrder::new(Some(99), Some(99), Some(99), Some(99), Some(99)),
+    order: LoginProviderSurfaceOrder::new(Some(99), Some(99), Some(99), Some(99)),
 };
 
 pub const OPENROUTER_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -551,7 +551,7 @@ pub const OPENROUTER_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDesc
     menu_detail: "API key, pay-per-token, 200+ models",
     recommended: false,
     target: LoginProviderTarget::OpenRouter,
-    order: LoginProviderSurfaceOrder::new(Some(4), Some(3), Some(4), Some(3), Some(3)),
+    order: LoginProviderSurfaceOrder::new(Some(4), Some(4), Some(3), Some(3)),
 };
 
 pub const BEDROCK_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -564,7 +564,7 @@ pub const BEDROCK_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "Bedrock API key or AWS credentials, pay-per-token",
     recommended: false,
     target: LoginProviderTarget::Bedrock,
-    order: LoginProviderSurfaceOrder::new(Some(5), Some(4), None, None, Some(4)),
+    order: LoginProviderSurfaceOrder::new(Some(5), None, None, Some(4)),
 };
 
 pub const AZURE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -577,7 +577,7 @@ pub const AZURE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescripto
     menu_detail: "Microsoft Entra ID or Azure OpenAI API key",
     recommended: false,
     target: LoginProviderTarget::Azure,
-    order: LoginProviderSurfaceOrder::new(Some(5), Some(5), None, None, Some(4)),
+    order: LoginProviderSurfaceOrder::new(Some(5), None, None, Some(4)),
 };
 
 pub const OPENCODE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -590,7 +590,7 @@ pub const OPENCODE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(OPENCODE_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(5), Some(4), Some(5), Some(4), Some(4)),
+    order: LoginProviderSurfaceOrder::new(Some(5), Some(5), Some(4), Some(4)),
 };
 
 pub const OPENCODE_GO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -603,7 +603,7 @@ pub const OPENCODE_GO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDes
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(OPENCODE_GO_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(6), Some(5), Some(6), Some(5), Some(5)),
+    order: LoginProviderSurfaceOrder::new(Some(6), Some(6), Some(5), Some(5)),
 };
 
 pub const ZAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -616,7 +616,7 @@ pub const ZAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor 
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(ZAI_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(7), Some(6), Some(7), Some(6), Some(6)),
+    order: LoginProviderSurfaceOrder::new(Some(7), Some(7), Some(6), Some(6)),
 };
 
 pub const KIMI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -635,7 +635,7 @@ pub const KIMI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor
     menu_detail: "API key, dedicated Kimi coding endpoint",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(KIMI_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(36), Some(36), Some(36), Some(36), Some(36)),
+    order: LoginProviderSurfaceOrder::new(Some(36), Some(36), Some(36), Some(36)),
 };
 
 pub const CHUTES_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -648,7 +648,7 @@ pub const CHUTES_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(CHUTES_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(8), Some(7), Some(8), Some(7), Some(7)),
+    order: LoginProviderSurfaceOrder::new(Some(8), Some(8), Some(7), Some(7)),
 };
 
 pub const CEREBRAS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -661,7 +661,7 @@ pub const CEREBRAS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(CEREBRAS_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(9), Some(8), Some(9), Some(8), Some(8)),
+    order: LoginProviderSurfaceOrder::new(Some(9), Some(9), Some(8), Some(8)),
 };
 
 pub const ALIBABA_CODING_PLAN_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -674,7 +674,7 @@ pub const ALIBABA_CODING_PLAN_LOGIN_PROVIDER: LoginProviderDescriptor = LoginPro
     menu_detail: "API key, dedicated Alibaba coding endpoint",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(ALIBABA_CODING_PLAN_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(10), Some(9), Some(10), Some(9), Some(9)),
+    order: LoginProviderSurfaceOrder::new(Some(10), Some(10), Some(9), Some(9)),
 };
 
 pub const AI302_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -687,7 +687,7 @@ pub const AI302_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescripto
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(AI302_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(18), Some(18), Some(18), Some(18), Some(18)),
+    order: LoginProviderSurfaceOrder::new(Some(18), Some(18), Some(18), Some(18)),
 };
 
 pub const BASETEN_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -700,7 +700,7 @@ pub const BASETEN_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(BASETEN_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(19), Some(19), Some(19), Some(19), Some(19)),
+    order: LoginProviderSurfaceOrder::new(Some(19), Some(19), Some(19), Some(19)),
 };
 
 pub const CORTECS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -713,7 +713,7 @@ pub const CORTECS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(CORTECS_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(20), Some(20), Some(20), Some(20), Some(20)),
+    order: LoginProviderSurfaceOrder::new(Some(20), Some(20), Some(20), Some(20)),
 };
 
 pub const DEEPSEEK_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -726,7 +726,7 @@ pub const DEEPSEEK_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(DEEPSEEK_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(21), Some(21), Some(21), Some(21), Some(21)),
+    order: LoginProviderSurfaceOrder::new(Some(21), Some(21), Some(21), Some(21)),
 };
 
 pub const COMTEGRA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -739,7 +739,7 @@ pub const COMTEGRA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "OpenAI-compatible LLM API",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(COMTEGRA_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(22), Some(22), Some(22), Some(22), Some(22)),
+    order: LoginProviderSurfaceOrder::new(Some(22), Some(22), Some(22), Some(22)),
 };
 
 pub const FPT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -752,7 +752,7 @@ pub const FPT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor 
     menu_detail: "OpenAI-compatible FPT AI Marketplace API",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(FPT_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(23), Some(23), Some(23), Some(23), Some(23)),
+    order: LoginProviderSurfaceOrder::new(Some(23), Some(23), Some(23), Some(23)),
 };
 
 pub const FIRMWARE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -765,7 +765,7 @@ pub const FIRMWARE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(FIRMWARE_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(24), Some(24), Some(24), Some(24), Some(24)),
+    order: LoginProviderSurfaceOrder::new(Some(24), Some(24), Some(24), Some(24)),
 };
 
 pub const HUGGING_FACE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -778,7 +778,7 @@ pub const HUGGING_FACE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDe
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(HUGGING_FACE_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(25), Some(25), Some(25), Some(25), Some(25)),
+    order: LoginProviderSurfaceOrder::new(Some(25), Some(25), Some(25), Some(25)),
 };
 
 pub const MOONSHOT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -791,7 +791,7 @@ pub const MOONSHOT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(MOONSHOT_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(26), Some(26), Some(26), Some(26), Some(26)),
+    order: LoginProviderSurfaceOrder::new(Some(26), Some(26), Some(26), Some(26)),
 };
 
 pub const NEBIUS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -804,7 +804,7 @@ pub const NEBIUS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(NEBIUS_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(27), Some(27), Some(27), Some(27), Some(27)),
+    order: LoginProviderSurfaceOrder::new(Some(27), Some(27), Some(27), Some(27)),
 };
 
 pub const SCALEWAY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -817,7 +817,7 @@ pub const SCALEWAY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(SCALEWAY_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(28), Some(28), Some(28), Some(28), Some(28)),
+    order: LoginProviderSurfaceOrder::new(Some(28), Some(28), Some(28), Some(28)),
 };
 
 pub const STACKIT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -830,7 +830,7 @@ pub const STACKIT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(STACKIT_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(29), Some(29), Some(29), Some(29), Some(29)),
+    order: LoginProviderSurfaceOrder::new(Some(29), Some(29), Some(29), Some(29)),
 };
 
 pub const GROQ_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -843,7 +843,7 @@ pub const GROQ_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(GROQ_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(30), Some(30), Some(30), Some(30), Some(30)),
+    order: LoginProviderSurfaceOrder::new(Some(30), Some(30), Some(30), Some(30)),
 };
 
 pub const MISTRAL_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -856,7 +856,7 @@ pub const MISTRAL_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(MISTRAL_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(29), Some(29), Some(29), Some(29), Some(29)),
+    order: LoginProviderSurfaceOrder::new(Some(29), Some(29), Some(29), Some(29)),
 };
 
 pub const PERPLEXITY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -869,7 +869,7 @@ pub const PERPLEXITY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDesc
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(PERPLEXITY_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(30), Some(30), Some(30), Some(30), Some(30)),
+    order: LoginProviderSurfaceOrder::new(Some(30), Some(30), Some(30), Some(30)),
 };
 
 pub const TOGETHER_AI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -882,7 +882,7 @@ pub const TOGETHER_AI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDes
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(TOGETHER_AI_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(31), Some(31), Some(31), Some(31), Some(31)),
+    order: LoginProviderSurfaceOrder::new(Some(31), Some(31), Some(31), Some(31)),
 };
 
 pub const DEEPINFRA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -895,7 +895,7 @@ pub const DEEPINFRA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescr
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(DEEPINFRA_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(32), Some(32), Some(32), Some(32), Some(32)),
+    order: LoginProviderSurfaceOrder::new(Some(32), Some(32), Some(32), Some(32)),
 };
 
 pub const FIREWORKS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -908,7 +908,7 @@ pub const FIREWORKS_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescr
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(FIREWORKS_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(37), Some(37), Some(37), Some(37), Some(37)),
+    order: LoginProviderSurfaceOrder::new(Some(37), Some(37), Some(37), Some(37)),
 };
 
 pub const MINIMAX_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -921,7 +921,7 @@ pub const MINIMAX_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescrip
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(MINIMAX_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(38), Some(38), Some(38), Some(38), Some(38)),
+    order: LoginProviderSurfaceOrder::new(Some(38), Some(38), Some(38), Some(38)),
 };
 
 pub const XAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -934,7 +934,7 @@ pub const XAI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor 
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(XAI_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(33), Some(33), Some(33), Some(33), Some(33)),
+    order: LoginProviderSurfaceOrder::new(Some(33), Some(33), Some(33), Some(33)),
 };
 
 pub const NVIDIA_NIM_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -947,7 +947,7 @@ pub const NVIDIA_NIM_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDesc
     menu_detail: "API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(NVIDIA_NIM_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(34), Some(34), Some(34), Some(34), Some(34)),
+    order: LoginProviderSurfaceOrder::new(Some(34), Some(34), Some(34), Some(34)),
 };
 
 pub const LMSTUDIO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -960,7 +960,7 @@ pub const LMSTUDIO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescri
     menu_detail: "local OpenAI-compatible endpoint",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(LMSTUDIO_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(34), Some(34), Some(34), Some(34), Some(34)),
+    order: LoginProviderSurfaceOrder::new(Some(34), Some(34), Some(34), Some(34)),
 };
 
 pub const OLLAMA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -973,7 +973,7 @@ pub const OLLAMA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "local OpenAI-compatible endpoint",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(OLLAMA_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(35), Some(35), Some(35), Some(35), Some(35)),
+    order: LoginProviderSurfaceOrder::new(Some(35), Some(35), Some(35), Some(35)),
 };
 
 pub const OPENAI_COMPAT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -986,7 +986,7 @@ pub const OPENAI_COMPAT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderD
     menu_detail: "custom endpoint setup: base URL first, then API key",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(OPENAI_COMPAT_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(10), Some(9), None, None, Some(9)),
+    order: LoginProviderSurfaceOrder::new(Some(10), None, None, Some(9)),
 };
 
 pub const CURSOR_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -996,23 +996,23 @@ pub const CURSOR_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     auth_state_key: LoginProviderAuthStateKey::Cursor,
     auth_status_method: "API key / CLI",
     aliases: &[],
-    menu_detail: "browser login or API key",
+    menu_detail: "provisioned CLI credential or API key",
     recommended: false,
     target: LoginProviderTarget::Cursor,
-    order: LoginProviderSurfaceOrder::new(Some(11), Some(12), None, Some(9), Some(12)),
+    order: LoginProviderSurfaceOrder::new(Some(11), None, Some(9), Some(12)),
 };
 
 pub const COPILOT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
     id: "copilot",
     display_name: "GitHub Copilot",
-    auth_kind: LoginProviderAuthKind::DeviceCode,
+    auth_kind: LoginProviderAuthKind::Provisioned,
     auth_state_key: LoginProviderAuthStateKey::Copilot,
-    auth_status_method: "device code",
+    auth_status_method: "provisioned token",
     aliases: &[],
-    menu_detail: "GitHub device flow",
+    menu_detail: "token provisioned outside the runtime",
     recommended: false,
     target: LoginProviderTarget::Copilot,
-    order: LoginProviderSurfaceOrder::new(Some(3), Some(10), Some(3), Some(10), Some(10)),
+    order: LoginProviderSurfaceOrder::new(Some(3), Some(3), Some(10), Some(10)),
 };
 
 pub const GEMINI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -1025,7 +1025,7 @@ pub const GEMINI_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "Google Gemini Code Assist OAuth login",
     recommended: false,
     target: LoginProviderTarget::Gemini,
-    order: LoginProviderSurfaceOrder::new(Some(13), Some(11), Some(4), Some(11), Some(13)),
+    order: LoginProviderSurfaceOrder::new(Some(13), Some(4), Some(11), Some(13)),
 };
 
 pub const GEMINI_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -1043,7 +1043,7 @@ pub const GEMINI_API_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDesc
     menu_detail: "Google AI Studio Developer API key (OpenAI-compatible)",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(GEMINI_OPENAI_COMPAT_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(38), Some(38), Some(38), Some(38), Some(38)),
+    order: LoginProviderSurfaceOrder::new(Some(38), Some(38), Some(38), Some(38)),
 };
 
 pub const ANTIGRAVITY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -1056,7 +1056,7 @@ pub const ANTIGRAVITY_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDes
     menu_detail: "Google Antigravity OAuth login",
     recommended: false,
     target: LoginProviderTarget::Antigravity,
-    order: LoginProviderSurfaceOrder::new(Some(12), Some(12), None, Some(12), Some(12)),
+    order: LoginProviderSurfaceOrder::new(Some(12), None, Some(12), Some(12)),
 };
 
 pub const XIAOMI_MIMO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -1069,7 +1069,7 @@ pub const XIAOMI_MIMO_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDes
     menu_detail: "OpenAI-compatible Xiaomi MiMo API",
     recommended: false,
     target: LoginProviderTarget::OpenAiCompatible(XIAOMI_MIMO_PROFILE),
-    order: LoginProviderSurfaceOrder::new(Some(37), Some(37), Some(37), Some(37), Some(37)),
+    order: LoginProviderSurfaceOrder::new(Some(37), Some(37), Some(37), Some(37)),
 };
 
 pub const GOOGLE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
@@ -1082,7 +1082,7 @@ pub const GOOGLE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     menu_detail: "read, draft, and send emails",
     recommended: false,
     target: LoginProviderTarget::Google,
-    order: LoginProviderSurfaceOrder::new(Some(13), None, None, None, None),
+    order: LoginProviderSurfaceOrder::new(Some(13), None, None, None),
 };
 
 pub(crate) const LOGIN_PROVIDERS: [LoginProviderDescriptor; 47] = [

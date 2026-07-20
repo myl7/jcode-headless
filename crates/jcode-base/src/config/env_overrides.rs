@@ -7,105 +7,7 @@ impl Config {
         reason = "Environment override parsing is intentionally explicit and grouped by config area"
     )]
     pub(crate) fn apply_env_overrides(&mut self) {
-        // Keybindings
-        if let Ok(v) = std::env::var("JCODE_SCROLL_UP_KEY") {
-            self.keybindings.scroll_up = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_DOWN_KEY") {
-            self.keybindings.scroll_down = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_PAGE_UP_KEY") {
-            self.keybindings.scroll_page_up = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_PAGE_DOWN_KEY") {
-            self.keybindings.scroll_page_down = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_MODEL_SWITCH_KEY") {
-            self.keybindings.model_switch_next = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_MODEL_SWITCH_PREV_KEY") {
-            self.keybindings.model_switch_prev = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_EFFORT_INCREASE_KEY") {
-            self.keybindings.effort_increase = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_EFFORT_DECREASE_KEY") {
-            self.keybindings.effort_decrease = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_CENTERED_TOGGLE_KEY") {
-            self.keybindings.centered_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_PROMPT_UP_KEY") {
-            self.keybindings.scroll_prompt_up = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_PROMPT_DOWN_KEY") {
-            self.keybindings.scroll_prompt_down = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_BOOKMARK_KEY") {
-            self.keybindings.scroll_bookmark = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_UP_FALLBACK_KEY") {
-            self.keybindings.scroll_up_fallback = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SCROLL_DOWN_FALLBACK_KEY") {
-            self.keybindings.scroll_down_fallback = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_WORKSPACE_LEFT_KEY") {
-            self.keybindings.workspace_left = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_WORKSPACE_DOWN_KEY") {
-            self.keybindings.workspace_down = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_WORKSPACE_UP_KEY") {
-            self.keybindings.workspace_up = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_WORKSPACE_RIGHT_KEY") {
-            self.keybindings.workspace_right = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_SIDE_PANEL_TOGGLE_KEY") {
-            self.keybindings.side_panel_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_COPY_SELECTION_TOGGLE_KEY") {
-            self.keybindings.copy_selection_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_DIAGRAM_PANE_TOGGLE_KEY") {
-            self.keybindings.diagram_pane_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_TYPING_SCROLL_LOCK_TOGGLE_KEY") {
-            self.keybindings.typing_scroll_lock_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_DIFF_MODE_CYCLE_KEY") {
-            self.keybindings.diff_mode_cycle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_INFO_WIDGET_TOGGLE_KEY") {
-            self.keybindings.info_widget_toggle = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_NEW_TERMINAL_KEY") {
-            self.keybindings.new_terminal = v;
-        }
-
-        // Dictation
-        if let Ok(v) = std::env::var("JCODE_DICTATION_COMMAND") {
-            self.dictation.command = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_DICTATION_MODE")
-            && let Ok(mode) = toml::from_str::<crate::protocol::TranscriptMode>(&format!(
-                "\"{}\"",
-                v.trim().to_ascii_lowercase()
-            ))
-        {
-            self.dictation.mode = mode;
-        }
-        if let Ok(v) = std::env::var("JCODE_DICTATION_KEY") {
-            self.dictation.key = v;
-        }
-        if let Ok(v) = std::env::var("JCODE_DICTATION_TIMEOUT_SECS")
-            && let Ok(parsed) = v.trim().parse::<u64>()
-        {
-            self.dictation.timeout_secs = parsed;
-        }
-
-        // Tools
+        // Tools        // Tools
         if let Ok(v) = std::env::var("JCODE_TOOL_PROFILE") {
             self.tools.profile = v;
         }
@@ -381,27 +283,7 @@ impl Config {
             }
         }
 
-        // Terminal spawning
-        if let Ok(v) = std::env::var("JCODE_SPAWN_HOOK") {
-            let trimmed = v.trim();
-            // An explicitly empty env value disables a config-file hook.
-            self.terminal.spawn_hook = if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            };
-        }
-        if let Ok(v) = std::env::var("JCODE_FOCUS_HOOK") {
-            let trimmed = v.trim();
-            // An explicitly empty env value disables a config-file hook.
-            self.terminal.focus_hook = if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            };
-        }
-
-        // Lifecycle hooks. Empty env values disable config-file hooks.
+        // Lifecycle hooks        // Lifecycle hooks. Empty env values disable config-file hooks.
         fn hook_env_override(slot: &mut Option<String>, key: &str) {
             if let Ok(v) = std::env::var(key) {
                 let trimmed = v.trim();
@@ -612,41 +494,6 @@ impl Config {
                 self.safety.jade_relay_reply_enabled = parsed;
             }
         }
-        if let Ok(v) = std::env::var("JCODE_JADE_RELAY_LAUNCH_ENABLED") {
-            if let Some(parsed) = parse_env_bool(&v) {
-                self.safety.jade_relay_launch_enabled = parsed;
-            }
-        }
-        if let Ok(v) = std::env::var("JCODE_JADE_RELAY_LAUNCH_WORKING_DIR") {
-            let trimmed = v.trim();
-            if !trimmed.is_empty() {
-                self.safety.jade_relay_launch_working_dir = Some(trimmed.to_string());
-            }
-        }
-        if let Ok(v) = std::env::var("JCODE_AMBIENT_VISIBLE") {
-            if let Some(parsed) = parse_env_bool(&v) {
-                self.ambient.visible = parsed;
-            }
-        }
-
-        // Gateway (iOS/web)
-        if let Ok(v) = std::env::var("JCODE_GATEWAY_ENABLED") {
-            if let Some(parsed) = parse_env_bool(&v) {
-                self.gateway.enabled = parsed;
-            }
-        }
-        if let Ok(v) = std::env::var("JCODE_GATEWAY_PORT") {
-            if let Ok(parsed) = v.trim().parse::<u16>() {
-                self.gateway.port = parsed;
-            }
-        }
-        if let Ok(v) = std::env::var("JCODE_GATEWAY_BIND_ADDR") {
-            let trimmed = v.trim();
-            if !trimmed.is_empty() {
-                self.gateway.bind_addr = trimmed.to_string();
-            }
-        }
-
         // Power management
         if let Ok(v) = std::env::var("JCODE_PREVENT_SLEEP_WHILE_STREAMING") {
             if let Some(parsed) = parse_env_bool(&v) {

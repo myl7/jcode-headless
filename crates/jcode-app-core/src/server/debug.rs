@@ -16,14 +16,13 @@ use super::debug_server_state::maybe_handle_server_state_command;
 use super::debug_session_admin::maybe_handle_session_admin_command;
 use super::debug_swarm_read::maybe_handle_swarm_read_command;
 use super::debug_swarm_write::{DebugSwarmWriteContext, maybe_handle_swarm_write_command};
-use super::debug_testers::execute_tester_command;
 use super::{
     FileTouchService, ServerIdentity, SharedContext, SwarmEvent, SwarmMember, VersionedPlan,
-    debug_control_allowed, fanout_session_event,
+    debug_control_allowed,
 };
 use crate::agent::Agent;
 use crate::ambient_runner::AmbientRunnerHandle;
-use crate::protocol::{Request, ServerEvent, TranscriptMode, decode_request, encode_event};
+use crate::protocol::{Request, ServerEvent, decode_request, encode_event};
 use crate::provider::Provider;
 use crate::transport::Stream;
 use anyhow::Result;
@@ -150,99 +149,6 @@ async fn resolve_client_debug_sender(
     Ok((client_id, sender))
 }
 
-async fn resolve_transcript_target_session(
-    requested_session: Option<String>,
-    client_connections: &Arc<RwLock<HashMap<String, ClientConnectionInfo>>>,
-    client_debug_state: &Arc<RwLock<ClientDebugState>>,
-    swarm_members: &Arc<RwLock<HashMap<String, SwarmMember>>>,
-) -> Result<String> {
-    let live_sessions: std::collections::HashSet<String> = swarm_members
-        .read()
-        .await
-        .iter()
-        .filter(|(_, member)| !member.is_headless && !member.event_txs.is_empty())
-        .map(|(session_id, _)| session_id.clone())
-        .collect();
-
-    if let Some(session_id) = requested_session.filter(|value| !value.trim().is_empty()) {
-        if !live_sessions.contains(&session_id) {
-            anyhow::bail!(
-                "Session '{}' does not have a connected TUI client for transcript injection",
-                session_id
-            );
-        }
-        return Ok(session_id);
-    }
-
-    if let Ok(Some(session_id)) = crate::dictation::focused_jcode_session()
-        && live_sessions.contains(&session_id)
-    {
-        return Ok(session_id);
-    }
-
-    if let Ok(Some(session_id)) = crate::dictation::last_focused_session()
-        && live_sessions.contains(&session_id)
-    {
-        return Ok(session_id);
-    }
-
-    let active_debug_id = client_debug_state.read().await.active_id.clone();
-    let connections = client_connections.read().await;
-
-    connections
-        .values()
-        .filter(|info| live_sessions.contains(&info.session_id))
-        .max_by(|left, right| {
-            left.last_seen
-                .cmp(&right.last_seen)
-                .then_with(|| {
-                    let left_is_active =
-                        active_debug_id.as_deref() == left.debug_client_id.as_deref();
-                    let right_is_active =
-                        active_debug_id.as_deref() == right.debug_client_id.as_deref();
-                    left_is_active.cmp(&right_is_active)
-                })
-        })
-        .map(|info| info.session_id.clone())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Transcript target could not be resolved from focused window, last-focused session, or any live TUI client"
-            )
-        })
-}
-
-pub(super) async fn inject_transcript(
-    id: u64,
-    text: String,
-    mode: TranscriptMode,
-    requested_session: Option<String>,
-    client_connections: &Arc<RwLock<HashMap<String, ClientConnectionInfo>>>,
-    client_debug_state: &Arc<RwLock<ClientDebugState>>,
-    swarm_members: &Arc<RwLock<HashMap<String, SwarmMember>>>,
-) -> Result<ServerEvent> {
-    let session_id = resolve_transcript_target_session(
-        requested_session,
-        client_connections,
-        client_debug_state,
-        swarm_members,
-    )
-    .await?;
-
-    let delivered = fanout_session_event(
-        swarm_members,
-        &session_id,
-        ServerEvent::Transcript { text, mode },
-    )
-    .await
-        > 0;
-
-    if !delivered {
-        anyhow::bail!("Failed to deliver transcript to session '{}'", session_id);
-    }
-
-    Ok(ServerEvent::Done { id })
-}
-
 #[expect(
     clippy::too_many_arguments,
     reason = "debug client wiring fans out across sessions, swarms, files, channels, jobs, and transport state"
@@ -322,34 +228,6 @@ pub(super) async fn handle_debug_client(
                 writer.write_all(json.as_bytes()).await?;
             }
 
-            Request::Transcript {
-                id,
-                text,
-                mode,
-                session_id: requested_session,
-            } => {
-                let event = match inject_transcript(
-                    id,
-                    text,
-                    mode,
-                    requested_session,
-                    &client_connections,
-                    &client_debug_state,
-                    &swarm_members,
-                )
-                .await
-                {
-                    Ok(event) => event,
-                    Err(err) => ServerEvent::Error {
-                        id,
-                        message: err.to_string(),
-                        retry_after_secs: None,
-                    },
-                };
-                let json = encode_event(&event);
-                writer.write_all(json.as_bytes()).await?;
-            }
-
             Request::DebugCommand {
                 id,
                 command,
@@ -420,10 +298,6 @@ pub(super) async fn handle_debug_client(
                                 }
                             }
                         }
-                    }
-                    "tester" => {
-                        // Handle tester commands
-                        execute_tester_command(cmd).await
                     }
                     _ => {
                         // Server commands (default)

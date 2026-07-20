@@ -1,7 +1,5 @@
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 mod directives;
 mod manager;
@@ -24,46 +22,9 @@ pub use prompt::{
     gather_memory_graph_health, gather_recent_sessions,
 };
 
-use crate::storage;
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/// Context passed from the ambient runner to a visible TUI cycle.
-/// Saved to `~/.jcode/ambient/visible_cycle.json`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VisibleCycleContext {
-    pub system_prompt: String,
-    pub initial_message: String,
-}
-
-impl VisibleCycleContext {
-    pub fn context_path() -> Result<PathBuf> {
-        Ok(storage::jcode_dir()?
-            .join("ambient")
-            .join("visible_cycle.json"))
-    }
-
-    pub fn save(&self) -> Result<()> {
-        let path = Self::context_path()?;
-        if let Some(parent) = path.parent() {
-            storage::ensure_dir(parent)?;
-        }
-        storage::write_json(&path, self)
-    }
-
-    pub fn load() -> Result<Self> {
-        let path = Self::context_path()?;
-        storage::read_json(&path)
-    }
-
-    pub fn result_path() -> Result<PathBuf> {
-        Ok(storage::jcode_dir()?
-            .join("ambient")
-            .join("cycle_result.json"))
-    }
-}
 
 /// Ambient mode status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

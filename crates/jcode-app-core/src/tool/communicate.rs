@@ -1163,9 +1163,8 @@ fn detect_credential_failure_wave(
     })
 }
 
-/// The `jcode login` invocation most likely to fix a credential wave for
-/// `provider`, mapping provider names to their login provider keys.
-fn credential_login_fix_hint(provider: Option<&str>) -> String {
+/// The credential-import action most likely to fix a credential wave.
+fn credential_fix_hint(provider: Option<&str>) -> String {
     let lowered = provider.map(str::to_ascii_lowercase);
     let target = match lowered.as_deref() {
         Some("anthropic" | "claude") => "claude",
@@ -1174,7 +1173,10 @@ fn credential_login_fix_hint(provider: Option<&str>) -> String {
         Some(other) if !other.trim().is_empty() => other,
         _ => "<provider>",
     };
-    format!("`jcode login --provider {target}`")
+    match target {
+        "claude" | "openai" => format!("`jcode auth import {target}`"),
+        _ => format!("replace the mounted credential for `{target}`"),
+    }
 }
 
 /// Actionable pause message for a credential-failure wave: names the failed
@@ -1186,7 +1188,7 @@ fn format_credential_failure_wave_error(wave: &CredentialFailureWave, window_sec
          credential/auth failures and no plan node has completed (e.g. {first}: \"{sample}\"). \
          A broken credential (expired OAuth session, revoked refresh token, or invalid API key) \
          fails every worker on that route, so assigning more nodes would only fail more of the \
-         plan. Fix auth first: run {login_hint} (or pin a working API-key route), then requeue \
+         plan. Fix auth first: {credential_hint} (or pin a working API-key route), then requeue \
          the failed nodes (`swarm retry`) and run `swarm run_plan` again.",
         count = wave.session_ids.len(),
         first = wave
@@ -1195,7 +1197,7 @@ fn format_credential_failure_wave_error(wave: &CredentialFailureWave, window_sec
             .map(String::as_str)
             .unwrap_or("worker"),
         sample = wave.sample_detail,
-        login_hint = credential_login_fix_hint(wave.provider.as_deref()),
+        credential_hint = credential_fix_hint(wave.provider.as_deref()),
     )
 }
 
@@ -2041,8 +2043,8 @@ impl Tool for CommunicateTool {
                 },
                 "spawn_mode": {
                     "type": "string",
-                    "enum": ["visible", "headless", "inline", "auto"],
-                    "description": "Per-call spawn mode for swarm-created agents. Overrides agents.swarm_spawn_mode config when set. 'visible' opens a terminal window, 'headless' runs in-process with no UI, 'inline' runs in-process and renders a live gallery viewport in the coordinator, 'auto' tries visible then falls back to headless. Defaults to inline."
+                    "enum": ["headless"],
+                    "description": "Swarm-created agents always run in-process with no UI."
                 },
                 "model": {
                     "type": "string",

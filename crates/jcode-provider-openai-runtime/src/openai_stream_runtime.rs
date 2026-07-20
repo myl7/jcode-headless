@@ -194,7 +194,7 @@ pub(super) async fn stream_response(
 
             if refresh_token.is_empty() {
                 return Err(OpenAIStreamFailure::Other(anyhow::anyhow!(
-                    "OpenAI rejected the access token and no refresh token is available; run /login to re-authenticate: {}",
+                    "OpenAI rejected the access token and no refresh token is available; replace or re-import the mounted credential: {}",
                     body
                 )));
             }
@@ -213,7 +213,7 @@ pub(super) async fn stream_response(
                 }
                 Err(refresh_err) => {
                     return Err(OpenAIStreamFailure::Other(anyhow::anyhow!(
-                        "OpenAI token refresh failed; run /login to re-authenticate: {refresh_err:#}"
+                        "OpenAI token refresh failed; replace or re-import the mounted credential: {refresh_err:#}"
                     )));
                 }
             }
@@ -1603,10 +1603,10 @@ mod stream_runtime_tests {
     #[test]
     fn missing_or_failed_refresh_is_not_retryable() {
         assert!(!is_retryable_error(
-            "openai rejected the access token and no refresh token is available; run /login to re-authenticate: 401"
+            "openai rejected the access token and no refresh token is available; replace or re-import the mounted credential: 401"
         ));
         assert!(!is_retryable_error(
-            "openai token refresh failed; run /login to re-authenticate: network error"
+            "openai token refresh failed; replace or re-import the mounted credential: network error"
         ));
     }
 

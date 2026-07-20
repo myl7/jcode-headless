@@ -15,7 +15,6 @@ members = [
     "crates/jcode-ambient-types",
     "crates/jcode-auth-types",
     "crates/jcode-embedding",
-    "crates/jcode-gateway-types",
     "crates/jcode-import-core",
     "crates/jcode-pdf",
     "crates/jcode-logging",
@@ -25,19 +24,15 @@ members = [
     "crates/jcode-compaction-core",
     "crates/jcode-config-types",
     "crates/jcode-core",
-    "crates/jcode-fuzzy",
     "crates/jcode-memory-types",
     "crates/jcode-message-types",
     "crates/jcode-overnight-core",
     "crates/jcode-plan",
-    "crates/jcode-productivity-core",
     "crates/jcode-swarm-core",
     "crates/jcode-protocol",
     "crates/jcode-selfdev-types",
     "crates/jcode-session-types",
-    "crates/jcode-setup-hints",
     "crates/jcode-storage",
-    "crates/jcode-side-panel-types",
     "crates/jcode-azure-auth",
     "crates/jcode-notify-email",
     "crates/jcode-provider-metadata",
@@ -64,8 +59,6 @@ members = [
     "crates/jcode-tool-core",
     "crates/jcode-tool-types",
     "crates/jcode-update-core",
-    "crates/jcode-terminal-launch",
-    "crates/jcode-terminal-image",
     "crates/jcode-telemetry-core",
     "crates/jcode-render-core",
 ]
@@ -103,7 +96,6 @@ async-trait = "0.1"
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["json", "charset", "http2", "system-proxy", "rustls-tls", "rustls-tls-native-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -126,7 +118,6 @@ chrono = { version = "0.4", features = ["serde"] }
 # OAuth
 sha2 = "0.10"
 hex = "0.4"
-open = "5"               # Used by explicit non-headless helper commands only
 
 # Streaming
 tokio-stream = "0.1"
@@ -211,30 +202,7 @@ incremental = true
 [profile.dev.package."*"]
 opt-level = 0
 
-# The fuzzy matcher runs a char-level DP over every picker entry on every
-# keystroke (e.g. /model search across hundreds of routes). Like the anim
-# kernels above, it is small, pure, dependency-free code that rarely changes,
-# so keeping it fully optimized in dev/selfdev builds costs one compile and
-# removes visible input lag in unoptimized builds.
-[profile.dev.package."jcode-fuzzy"]
-opt-level = 3
-
-[profile.selfdev.package."jcode-fuzzy"]
-opt-level = 3
-
-[profile.test.package."jcode-fuzzy"]
-opt-level = 3
-
-[profile.release.package."jcode-fuzzy"]
-opt-level = 3
-
-# Keep the raster image pipeline optimized in dev/selfdev/test builds.
-#
-# Inline transcript images decode (png/zune-jpeg/fdeflate/miniz_oxide), resize
-# (image), and base64-encode (kitty transmit) at draw time; at opt-level 0 a
-# single screenshot costs 100-200ms per decode/resize, which reads as input
-# lag. These are pure pixel crates with no jcode logic, so optimizing them
-# does not hurt rebuild times for our own code.
+# Keep the raster image pipeline optimized for model visual inputs.
 [profile.dev.package.image]
 opt-level = 3
 [profile.selfdev.package.image]

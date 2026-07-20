@@ -26,7 +26,7 @@ Options:
 
 Examples:
   scripts/compile_time_probe.sh --skip-build
-  scripts/compile_time_probe.sh --touch crates/jcode-tui/src/tui/app/input.rs
+  scripts/compile_time_probe.sh --touch crates/jcode-app-core/src/server.rs
   scripts/compile_time_probe.sh --json target/compile-time-probe.json
 
 Notes:
@@ -34,7 +34,7 @@ Notes:
     compile-time isolation work that keeps debug/selfdev behavior production-like.
   - The "jcode serial stack" summary is not a formal Cargo critical path. It is a
     focused view of the known long-pole crates: jcode-base, jcode-app-core,
-    jcode-tui, root jcode lib, and jcode bin.
+    root jcode lib, and jcode bin.
 USAGE
 }
 
@@ -249,7 +249,7 @@ top_units = sorted(units, key=lambda unit: float(unit.get("duration", 0.0)), rev
 def is_jcode_stack_unit(unit: dict[str, Any]) -> bool:
     name = unit.get("name")
     target = unit.get("target") or ""
-    if name in {"jcode-base", "jcode-app-core", "jcode-tui"} and "build script" not in target:
+    if name in {"jcode-base", "jcode-app-core"} and "build script" not in target:
         return True
     if name == "jcode" and (target == "" or f'bin "{bin_name}"' in target):
         return True

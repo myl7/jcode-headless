@@ -1,0 +1,13 @@
+.git
+.github
+.firecrawl
+.jcode
+.claude
+target
+changelog
+docs
+telemetry-worker
+*.log
+*.mp4
+*.gif
+*.png

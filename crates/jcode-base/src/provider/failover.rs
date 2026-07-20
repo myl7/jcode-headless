@@ -83,7 +83,9 @@ impl MultiProvider {
             msg.push(' ');
             msg.push_str(&extra_guidance.join(" "));
         }
-        msg.push_str(" Use `/usage` to check limits and `/login <provider>` to re-authenticate.");
+        msg.push_str(
+            " Use `jcode usage` to check limits, then replace or re-import the mounted credential.",
+        );
         anyhow::anyhow!(msg)
     }
 }

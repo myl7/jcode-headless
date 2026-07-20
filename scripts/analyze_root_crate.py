@@ -247,8 +247,8 @@ def outbound_refs(files: list[str], self_name: str, exclude_tests: bool = True):
                 counts[m.group(1)] += 1
         # Grouped `use crate::{...}` edges (invisible to CRATE_RE) and bare
         # `alias::` usages from imported module aliases. Without this, any
-        # module pulled in via a grouped import (e.g. `use crate::{id, tui};`)
-        # and then referenced as `tui::App` would be entirely uncounted,
+        # module pulled in via a grouped import (e.g. `use crate::{id, server};`)
+        # and then referenced as `server::run` would be entirely uncounted,
         # badly undercounting edge weights for crate-split planning.
         joined = "".join(code_lines)
         group_edges, aliases = _module_imports(joined)

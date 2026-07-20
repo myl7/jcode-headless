@@ -20,25 +20,13 @@
 .PARAMETER BuildFromSource
     If no prebuilt release asset is available, explicitly allow a source build.
     Source builds require Git, Rust, and the Visual Studio C++ Build Tools.
-.PARAMETER ConfigureAlacritty
-    Install Alacritty through winget when it is not already available.
-.PARAMETER ConfigureHotkey
-    Configure the optional global launch hotkey.
-.PARAMETER SkipAlacrittySetup
-    Deprecated compatibility switch. Alacritty setup is opt-in by default.
-.PARAMETER SkipHotkeySetup
-    Deprecated compatibility switch. Hotkey setup is opt-in by default.
 #>
 param(
     [string]$InstallDir,
     [string]$Version,
     [string]$ArtifactExePath,
     [string]$ArtifactTgzPath,
-    [switch]$BuildFromSource,
-    [switch]$ConfigureAlacritty,
-    [switch]$ConfigureHotkey,
-    [switch]$SkipAlacrittySetup,
-    [switch]$SkipHotkeySetup
+    [switch]$BuildFromSource
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,17 +48,6 @@ if (-not $InstallDir) {
     if (-not $localAppData -and $env:USERPROFILE) { $localAppData = Join-Path $env:USERPROFILE "AppData\Local" }
     $InstallDir = Join-Path $localAppData "jcode\bin"
 }
-
-$JcodeHome = if ($env:JCODE_HOME) {
-    $env:JCODE_HOME
-} elseif ($env:USERPROFILE) {
-    Join-Path $env:USERPROFILE ".jcode"
-} else {
-    Join-Path ([Environment]::GetFolderPath("UserProfile")) ".jcode"
-}
-
-$HotkeyDir = Join-Path $JcodeHome "hotkey"
-$SetupHintsPath = Join-Path $JcodeHome "setup_hints.json"
 
 function Write-Info($msg) { Write-Host $msg -ForegroundColor Blue }
 function Write-Err($msg) { throw "error: $msg" }
@@ -594,305 +571,6 @@ function Write-LogTail([string]$Path, [string]$Label) {
     }
 }
 
-function Test-CommandExists([string]$CommandName) {
-    return [bool](Get-Command $CommandName -ErrorAction SilentlyContinue)
-}
-
-function Test-AlacrittyInstalled {
-    return [bool](Find-AlacrittyPath)
-}
-
-function Find-AlacrittyPath {
-    $candidates = @(
-        "C:\Program Files\Alacritty\alacritty.exe",
-        "C:\Program Files (x86)\Alacritty\alacritty.exe"
-    )
-
-    if ($env:LOCALAPPDATA) {
-        $candidates += (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\alacritty.exe")
-    }
-
-    foreach ($candidate in $candidates) {
-        if ($candidate -and (Test-Path $candidate)) {
-            return $candidate
-        }
-    }
-
-    try {
-        $command = Get-Command alacritty -ErrorAction Stop
-        if ($command -and $command.Source) {
-            return $command.Source
-        }
-    } catch {}
-
-    return $null
-}
-
-function Install-Alacritty {
-    if (Test-AlacrittyInstalled) {
-        Write-Info "Alacritty is already installed"
-        return $true
-    }
-
-    if (-not (Test-CommandExists "winget")) {
-        Write-Warn "winget was not found, so Alacritty could not be installed automatically"
-        Write-Warn "Install App Installer / winget from Microsoft, then run: winget install -e --id Alacritty.Alacritty"
-        return $false
-    }
-
-    Write-Info "Installing Alacritty..."
-    $wingetArgs = @(
-        "install",
-        "-e",
-        "--id", "Alacritty.Alacritty",
-        "--accept-source-agreements",
-        "--accept-package-agreements",
-        "--disable-interactivity"
-    )
-
-    $wingetResult = Invoke-ProcessWithTimeout -FilePath "winget" -ArgumentList $wingetArgs -TimeoutSeconds 180 -FriendlyName "winget-install"
-    if ($wingetResult.TimedOut) {
-        Write-Warn "Alacritty install timed out after 180 seconds; skipping automatic setup"
-        return $false
-    }
-
-    if ($wingetResult.ExitCode -ne 0) {
-        Write-Warn "Alacritty install failed (winget exit code: $($wingetResult.ExitCode))"
-        return $false
-    }
-
-    $alacrittyPath = Find-AlacrittyPath
-    if (-not $alacrittyPath) {
-        Write-Warn "Alacritty install finished, but alacritty.exe was not found on PATH yet"
-        return $false
-    }
-
-    Write-Info "Alacritty installed: $alacrittyPath"
-    return $true
-}
-
-function Stop-JcodeHotkeyListeners {
-    try {
-        Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.CommandLine -like '*jcode-hotkey*' } |
-            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    } catch {}
-
-    try {
-        $currentPid = $PID
-        Get-CimInstance Win32_Process -Filter "Name = 'jcode.exe'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.ProcessId -ne $currentPid -and $_.CommandLine -like '*--listen-windows-hotkey*' } |
-            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    } catch {}
-}
-
-function ConvertFrom-JcodeVersionOutput([string]$Output) {
-    if (-not $Output) {
-        return $null
-    }
-
-    # A genuinely fresh profile may print the one-time telemetry notice before
-    # the version. When output is captured by PowerShell, terminal control
-    # sequences can also leave the final `jcode v...` on the same logical line.
-    if ($Output -match '(?i)\bjcode\s+v?([0-9][0-9A-Za-z.+-]*)') {
-        return "v$($Matches[1])"
-    }
-
-    return $null
-}
-
-function Get-JcodeVersionFromBinary([string]$BinaryPath) {
-    if (-not $BinaryPath -or -not (Test-Path -LiteralPath $BinaryPath)) {
-        return $null
-    }
-
-    $previousErrorActionPreference = $ErrorActionPreference
-    try {
-        # Fresh profiles emit the one-time telemetry notice on stderr. Under
-        # Windows PowerShell with ErrorActionPreference=Stop, native stderr is
-        # promoted to a terminating NativeCommandError even when the process
-        # succeeds. Capture both streams without letting that notice abort the
-        # version probe.
-        $ErrorActionPreference = 'Continue'
-        $output = (& $BinaryPath --version 2>&1 | Out-String).Trim()
-        $exitCode = $LASTEXITCODE
-        if ($exitCode -ne 0) {
-            return $null
-        }
-        return (ConvertFrom-JcodeVersionOutput $output)
-    } catch {
-        return $null
-    } finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-    }
-}
-
-function Assert-JcodeBinaryCandidate {
-    param(
-        [Parameter(Mandatory = $true)][string]$BinaryPath,
-        [Parameter(Mandatory = $true)][string]$ExpectedVersion
-    )
-
-    if ($env:JCODE_INSTALL_SKIP_BINARY_VALIDATION -eq "1") {
-        return $null
-    }
-
-    $reportedVersion = Get-JcodeVersionFromBinary $BinaryPath
-    if (-not $reportedVersion) {
-        Write-Err "Downloaded jcode binary could not run '--version'. It may be corrupt, quarantined by antivirus, or built for the wrong architecture."
-    }
-
-    $expectedNumber = $ExpectedVersion.TrimStart('v')
-    if ($reportedVersion.TrimStart('v') -ne $expectedNumber) {
-        Write-Err "Downloaded binary reports $reportedVersion, but the installer requested $ExpectedVersion"
-    }
-
-    Write-Info "Validated jcode binary: $reportedVersion"
-    return $reportedVersion
-}
-
-function Test-JcodeMsvcBuildToolsAvailable {
-    if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-        return $true
-    }
-
-    $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
-    if (-not $programFilesX86) {
-        return $false
-    }
-
-    $vswhere = Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path -LiteralPath $vswhere)) {
-        return $false
-    }
-
-    try {
-        $linkPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe' 2>$null | Select-Object -First 1
-        return [bool]$linkPath
-    } catch {
-        return $false
-    }
-}
-
-function Assert-JcodeSourceBuildPrerequisites {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Err "Git is required for -BuildFromSource. Install it with: winget install -e --id Git.Git"
-    }
-    if (-not (Get-Command cargo -ErrorAction SilentlyContinue) -or -not (Get-Command rustc -ErrorAction SilentlyContinue)) {
-        Write-Err "Rust is required for -BuildFromSource. Install it from https://rustup.rs, then open a new PowerShell window."
-    }
-
-    $rustHost = ""
-    try {
-        $rustHost = (& rustc -vV 2>$null | Select-String '^host:' | Select-Object -First 1).ToString()
-    } catch {}
-
-    if ($rustHost -match 'pc-windows-msvc' -and -not (Test-JcodeMsvcBuildToolsAvailable)) {
-        Write-Err "The MSVC linker (link.exe) was not found. Install Visual Studio 2022 Build Tools with the 'Desktop development with C++' workload, then open a new PowerShell window before using -BuildFromSource."
-    }
-}
-
-function Set-SetupHintsState([bool]$AlacrittyConfigured, [bool]$HotkeyConfigured) {
-    New-Item -ItemType Directory -Path $JcodeHome -Force | Out-Null
-
-    $state = @{
-        launch_count = 0
-        hotkey_configured = $HotkeyConfigured
-        hotkey_dismissed = $HotkeyConfigured
-        alacritty_configured = $AlacrittyConfigured
-        alacritty_dismissed = $AlacrittyConfigured
-        desktop_shortcut_created = $false
-        mac_ghostty_guided = $false
-        mac_ghostty_dismissed = $false
-    }
-
-    if (Test-Path $SetupHintsPath) {
-        try {
-            $existing = Get-Content $SetupHintsPath -Raw | ConvertFrom-Json -ErrorAction Stop
-            foreach ($property in $existing.PSObject.Properties) {
-                $state[$property.Name] = $property.Value
-            }
-        } catch {
-            Write-Warn "Could not read existing setup hints state; overwriting it"
-        }
-    }
-
-    if ($AlacrittyConfigured) {
-        $state.alacritty_configured = $true
-        $state.alacritty_dismissed = $true
-    }
-
-    if ($HotkeyConfigured) {
-        $state.hotkey_configured = $true
-        $state.hotkey_dismissed = $true
-    }
-
-    $state | ConvertTo-Json | Set-Content -Path $SetupHintsPath -Encoding UTF8
-}
-
-function Get-JcodeHotkeyShortcutScript([string]$StartupShortcutPath, [string]$JcodeExePath) {
-    $escapedShortcutPath = $StartupShortcutPath.Replace("'", "''")
-    $escapedExePath = $JcodeExePath.Replace("'", "''")
-    $listenerArguments = "-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -Command `"& '$escapedExePath' setup-hotkey --listen-windows-hotkey`""
-    $escapedListenerArguments = $listenerArguments.Replace("'", "''")
-    $shortcutLines = @(
-        '$ErrorActionPreference = ''Stop''',
-        '$shell = New-Object -ComObject WScript.Shell',
-        "`$shortcut = `$shell.CreateShortcut('$escapedShortcutPath')",
-        "`$shortcut.TargetPath = 'powershell.exe'",
-        "`$shortcut.Arguments = '$escapedListenerArguments'",
-        "`$shortcut.Description = 'jcode global launch hotkey listener'",
-        '$shortcut.WindowStyle = 7',
-        '$shortcut.Save()',
-        "Write-Output 'OK'"
-    )
-    return ($shortcutLines -join "`r`n")
-}
-
-function Install-JcodeHotkey([string]$JcodeExePath) {
-    New-Item -ItemType Directory -Path $HotkeyDir -Force | Out-Null
-    $skipProcessLifecycle = (
-        $env:JCODE_WINDOWS_SETUP_SKIP_EXTERNALS -eq "1" -or
-        $env:JCODE_WINDOWS_SETUP_SKIP_PROCESS_LIFECYCLE -eq "1"
-    )
-    if (-not $skipProcessLifecycle) {
-        Stop-JcodeHotkeyListeners
-    }
-
-    # Upgrade cleanup: v0.47 and earlier wrote a generated PowerShell listener.
-    # The first-party listener now lives in jcode.exe itself and is launched via
-    # `jcode setup-hotkey --listen-windows-hotkey` from a login shortcut.
-    Remove-Item -Path (Join-Path $HotkeyDir "jcode-hotkey.ps1") -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path (Join-Path $HotkeyDir "jcode-hotkey-launcher.vbs") -Force -ErrorAction SilentlyContinue
-    $startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
-    New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
-    $startupShortcutPath = Join-Path $startupDir "jcode-hotkey.lnk"
-    $shortcutScript = Get-JcodeHotkeyShortcutScript -StartupShortcutPath $startupShortcutPath -JcodeExePath $JcodeExePath
-
-    if ($env:JCODE_WINDOWS_SETUP_SKIP_EXTERNALS -eq "1") {
-        Set-Content -Path (Join-Path $HotkeyDir "jcode-hotkey-shortcut.ps1") -Value $shortcutScript -Encoding UTF8
-        Write-Info "Configured Alt+; and the Copilot key to launch jcode"
-        return $true
-    }
-
-    $shortcutOutput = & powershell -NoProfile -Command $shortcutScript
-    if ($LASTEXITCODE -ne 0 -or -not ($shortcutOutput -match 'OK')) {
-        Write-Warn "Created hotkey files, but could not create the Startup shortcut"
-        return $false
-    }
-
-    $escapedExePath = $JcodeExePath.Replace("'", "''")
-    $launchHotkeyCommand = "Start-Process -FilePath '$escapedExePath' -ArgumentList @('setup-hotkey', '--listen-windows-hotkey') -WindowStyle Hidden"
-    if (-not $skipProcessLifecycle) {
-        & powershell -NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -Command $launchHotkeyCommand | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Hotkey will start on next login, but could not be launched immediately"
-        }
-    }
-
-    Write-Info "Configured Alt+; and the Copilot key to launch jcode"
-    return $true
-}
 function Resolve-JcodeWindowsArtifact([string[]]$ArchitectureCandidates) {
     $sawX64 = $false
 
@@ -1118,58 +796,17 @@ if ($userPathUpdate.Changed) {
 
 Set-JcodeProcessPath -InstallDir $InstallDir | Out-Null
 
-$installedAlacritty = $false
-$configuredHotkey = $false
-$shouldSetupAlacritty = [bool]($ConfigureAlacritty -and -not $SkipAlacrittySetup)
-$shouldSetupHotkey = [bool]($ConfigureHotkey -and -not $SkipHotkeySetup)
-
-if ($ConfigureAlacritty -and $SkipAlacrittySetup) {
-    Write-Warn "Both -ConfigureAlacritty and -SkipAlacrittySetup were provided; skipping Alacritty setup"
-}
-if ($ConfigureHotkey -and $SkipHotkeySetup) {
-    Write-Warn "Both -ConfigureHotkey and -SkipHotkeySetup were provided; skipping hotkey setup"
-}
-
-if ($shouldSetupAlacritty) {
-    $installedAlacritty = Install-Alacritty
-} else {
-    $installedAlacritty = Test-AlacrittyInstalled
-    Write-Info "Optional Alacritty setup not requested"
-}
-
-if ($shouldSetupHotkey) {
-    $configuredHotkey = Install-JcodeHotkey -JcodeExePath $LauncherPath
-} else {
-    Write-Info "Optional global hotkey setup not requested"
-}
-
-Set-SetupHintsState -AlacrittyConfigured:(Test-AlacrittyInstalled) -HotkeyConfigured:$configuredHotkey
-
 Write-Host ""
 Write-Info "jcode $Version installed successfully!"
 Write-Host ""
 
-if (Test-AlacrittyInstalled) {
-    $alacrittyPath = Find-AlacrittyPath
-    if ($alacrittyPath) {
-        Write-Info "Alacritty ready: $alacrittyPath"
-    }
-}
-
-if ($configuredHotkey) {
-    Write-Info "Global launch keys ready: Alt+; and the Copilot key open jcode"
-    Write-Host ""
-} elseif (-not $ConfigureHotkey) {
-    Write-Info "Optional: run 'jcode setup-hotkey' to configure global launch hotkeys and terminal preferences."
-    Write-Host ""
-}
 
 if (Get-Command jcode -ErrorAction SilentlyContinue) {
-    Write-Info "Run 'jcode' to get started."
+    Write-Info "Run 'jcode --help' to get started."
 } else {
     Write-Host "  Open a new terminal window, then run:"
     Write-Host ""
-    Write-Host "    jcode" -ForegroundColor Green
+    Write-Host "    jcode --help" -ForegroundColor Green
 }
 }
 

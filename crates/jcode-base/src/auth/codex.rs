@@ -332,6 +332,41 @@ pub fn load_oauth_credentials() -> Result<CodexCredentials> {
     load_oauth_credentials_internal(true)
 }
 
+/// Import an already-authenticated Codex credential into jcode's writable
+/// account store. This never starts an OAuth flow or prompts the user.
+pub fn import_pre_authenticated_credentials() -> Result<String> {
+    let credentials = load_legacy_oauth_credentials()
+        .context("No pre-authenticated Codex credential was found in the mounted external path")?;
+    import_credentials_into_account(credentials)
+}
+
+/// Import a Codex credential JSON blob supplied over a protected channel such
+/// as stdin.
+pub fn import_pre_authenticated_credentials_blob(content: &str) -> Result<String> {
+    let file: LegacyAuthFile = serde_json::from_str(content)
+        .context("Could not parse the supplied Codex credential JSON")?;
+    let tokens = file
+        .tokens
+        .context("No OAuth tokens found in supplied Codex credential JSON")?;
+    import_credentials_into_account(credentials_from_legacy_tokens(&tokens))
+}
+
+fn import_credentials_into_account(credentials: CodexCredentials) -> Result<String> {
+    if credentials.refresh_token.trim().is_empty() {
+        anyhow::bail!(
+            "Mounted Codex credentials have no refresh token; refusing a non-durable import"
+        );
+    }
+    let label = login_target_label(None)?;
+    upsert_account_from_tokens(
+        &label,
+        &credentials.access_token,
+        &credentials.refresh_token,
+        credentials.id_token,
+        credentials.expires_at,
+    )
+}
+
 fn load_oauth_credentials_internal(return_expired: bool) -> Result<CodexCredentials> {
     let now_ms = chrono::Utc::now().timestamp_millis();
     let mut expired_candidates: Vec<(&str, CodexCredentials)> = Vec::new();

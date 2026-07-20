@@ -169,7 +169,6 @@ fn test_history_event_decodes_without_compaction_mode_for_older_servers() -> Res
         available_models,
         connection_type,
         compaction_mode,
-        side_panel,
         ..
     } = decoded
     else {
@@ -180,12 +179,11 @@ fn test_history_event_decodes_without_compaction_mode_for_older_servers() -> Res
     assert_eq!(available_models, vec!["gpt-5.4"]);
     assert_eq!(connection_type.as_deref(), Some("websocket"));
     assert_eq!(compaction_mode, crate::config::CompactionMode::Reactive);
-    assert!(!side_panel.has_pages());
     Ok(())
 }
 
 #[test]
-fn test_history_event_roundtrip_preserves_side_panel_snapshot() -> Result<()> {
+fn test_history_event_roundtrip_preserves_usage_snapshot() -> Result<()> {
     let event = ServerEvent::History {
         id: 101,
         session_id: "ses_test_456".to_string(),
@@ -231,24 +229,11 @@ fn test_history_event_roundtrip_preserves_side_panel_snapshot() -> Result<()> {
         autojudge_enabled: None,
         compaction_mode: crate::config::CompactionMode::Reactive,
         activity: None,
-        side_panel: crate::side_panel::SidePanelSnapshot {
-            focused_page_id: Some("page-1".to_string()),
-            pages: vec![crate::side_panel::SidePanelPage {
-                id: "page-1".to_string(),
-                title: "Notes".to_string(),
-                file_path: "/tmp/notes.md".to_string(),
-                format: crate::side_panel::SidePanelPageFormat::Markdown,
-                source: crate::side_panel::SidePanelPageSource::Managed,
-                content: "# Notes".to_string(),
-                updated_at_ms: 42,
-            }],
-        },
     };
     let json = encode_event(&event);
     let decoded = parse_event_json(json.trim())?;
     let ServerEvent::History {
         id,
-        side_panel,
         messages,
         provider_name,
         provider_model,
@@ -268,10 +253,6 @@ fn test_history_event_roundtrip_preserves_side_panel_snapshot() -> Result<()> {
         Some(80)
     );
     assert_eq!(messages.len(), 1);
-    assert_eq!(side_panel.focused_page_id.as_deref(), Some("page-1"));
-    assert_eq!(side_panel.pages.len(), 1);
-    assert_eq!(side_panel.pages[0].title, "Notes");
-    assert_eq!(side_panel.pages[0].content, "# Notes");
     Ok(())
 }
 
@@ -314,35 +295,6 @@ fn test_compacted_history_event_roundtrip() -> Result<()> {
     assert_eq!(compacted_total, 128);
     assert_eq!(compacted_visible, 64);
     assert_eq!(compacted_remaining, 64);
-    Ok(())
-}
-
-#[test]
-fn test_side_panel_state_event_roundtrip() -> Result<()> {
-    let event = ServerEvent::SidePanelState {
-        snapshot: crate::side_panel::SidePanelSnapshot {
-            focused_page_id: Some("page-1".to_string()),
-            pages: vec![crate::side_panel::SidePanelPage {
-                id: "page-1".to_string(),
-                title: "Notes".to_string(),
-                file_path: "/tmp/notes.md".to_string(),
-                format: crate::side_panel::SidePanelPageFormat::Markdown,
-                source: crate::side_panel::SidePanelPageSource::Managed,
-                content: "updated".to_string(),
-                updated_at_ms: 99,
-            }],
-        },
-    };
-    let json = encode_event(&event);
-    assert!(json.contains("\"type\":\"side_panel_state\""));
-    let decoded = parse_event_json(json.trim())?;
-    let ServerEvent::SidePanelState { snapshot } = decoded else {
-        return Err(anyhow!("expected SidePanelState event"));
-    };
-    assert_eq!(snapshot.focused_page_id.as_deref(), Some("page-1"));
-    assert_eq!(snapshot.pages.len(), 1);
-    assert_eq!(snapshot.pages[0].title, "Notes");
-    assert_eq!(snapshot.pages[0].content, "updated");
     Ok(())
 }
 

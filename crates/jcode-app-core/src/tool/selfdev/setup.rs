@@ -134,7 +134,7 @@ impl SelfDevTool {
         }
 
         // A reloadable/built binary, so the agent knows whether it still needs a
-        // build before `selfdev reload`/`enter` can hand off into a dev binary.
+        // build before `selfdev reload` can hand off into a dev binary.
         if let Some(repo) = repo_dir.as_deref() {
             match build::find_dev_binary(repo) {
                 Some(binary) => {
@@ -174,7 +174,7 @@ impl SelfDevTool {
             }
         } else {
             output.push_str(
-                "\nAll prerequisites satisfied. Use `selfdev enter` to start working on jcode.\n",
+                "\nAll prerequisites satisfied. Start a self-dev-enabled headless session to work on jcode.\n",
             );
         }
 

@@ -18,7 +18,7 @@ Policy:
 - `--update` refreshes the baseline after intentional cleanup.
 
 The long-term goal is to drive this budget to zero as the migration-era
-re-export spine (base -> app-core -> tui -> root) is dismantled. See
+re-export spine (base -> app-core -> root) is kept narrow. See
 docs/CRATE_OWNERSHIP_BOUNDARIES.md.
 """
 

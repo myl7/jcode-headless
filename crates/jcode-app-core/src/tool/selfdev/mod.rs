@@ -5,10 +5,8 @@
 use crate::background::{self, TaskResult};
 use crate::build;
 use crate::bus::BackgroundTaskStatus;
-use crate::protocol::{ServerEvent, TranscriptMode};
 use crate::server;
 use crate::session;
-use crate::session_launch;
 use crate::storage;
 use crate::tool::{Tool, ToolContext, ToolExecutionMode, ToolOutput};
 use anyhow::Result;
@@ -21,14 +19,12 @@ use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 mod build_queue;
-mod launch;
 mod reload;
 mod setup;
 mod status;
 #[cfg(test)]
 mod tests;
 
-pub use launch::{enter_selfdev_session, schedule_selfdev_prompt_delivery};
 pub use reload::{ReloadRecoveryDirective, persisted_background_tasks_note};
 pub use status::selfdev_status_output;
 
@@ -38,18 +34,12 @@ pub const JCODE_REPO_URL: &str = "https://github.com/1jehuang/jcode.git";
 #[derive(Debug, Deserialize)]
 struct SelfDevInput {
     action: String,
-    /// Optional prompt to seed the spawned self-dev session.
-    #[serde(default)]
-    prompt: Option<String>,
     /// Optional context for reload - what the agent is working on
     #[serde(default)]
     context: Option<String>,
     /// Why this build is needed; shown to other queued/blocked agents.
     #[serde(default)]
     reason: Option<String>,
-    /// Build target for selfdev build: auto, tui, desktop, or all.
-    #[serde(default)]
-    target: Option<String>,
     /// Shell command for selfdev test/check action.
     #[serde(default)]
     command: Option<String>,
@@ -80,24 +70,6 @@ pub struct ReloadContext {
     pub session_id: String,
     /// Timestamp
     pub timestamp: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct SelfDevLaunchResult {
-    pub session_id: String,
-    pub repo_dir: PathBuf,
-    pub launched: bool,
-    pub test_mode: bool,
-    pub exe: Option<PathBuf>,
-    pub inherited_context: bool,
-}
-
-impl SelfDevLaunchResult {
-    pub fn command_preview(&self) -> Option<String> {
-        self.exe
-            .as_ref()
-            .map(|exe| format!("{} --resume {} self-dev", exe.display(), self.session_id))
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -483,7 +455,7 @@ impl SelfDevTool {
     }
 
     /// Description shown to the model, tailored to whether this is a self-dev
-    /// session. Outside self-dev mode the tool is an on-ramp (enter/setup/
+    /// session. Outside self-dev mode the tool is an on-ramp (setup/
     /// reload/find-config); inside self-dev it manages builds and reloads.
     pub fn description_for(is_selfdev: bool) -> &'static str {
         if is_selfdev {
@@ -497,7 +469,7 @@ impl SelfDevTool {
     /// JSON schema advertised to the model, tailored to the session mode.
     ///
     /// Outside self-dev mode only the on-ramp actions are exposed
-    /// (`enter`, `setup`, `reload`, `find-config`, `status`). Inside a self-dev
+    /// (`setup`, `reload`, `find-config`, `status`). Inside a self-dev
     /// session the full build/test/reload/socket surface is exposed.
     pub fn schema_for(is_selfdev: bool) -> Value {
         if is_selfdev {
@@ -508,7 +480,6 @@ impl SelfDevTool {
                     "action": {
                         "type": "string",
                         "enum": [
-                            "enter",
                             "setup",
                             "build",
                             "build-reload",
@@ -522,14 +493,8 @@ impl SelfDevTool {
                         ],
                         "description": "Action. `build-reload` queues a build and, once it finishes successfully, reloads onto the new binary in one step."
                     },
-                    "prompt": { "type": "string" },
                     "context": { "type": "string" },
                     "reason": { "type": "string" },
-                    "target": {
-                        "type": "string",
-                        "enum": ["auto", "tui", "desktop", "all"],
-                        "description": "Build target for action=build. auto chooses from changed paths; tui builds jcode; desktop builds jcode-desktop; all builds both."
-                    },
                     "command": {
                         "type": "string",
                         "description": "Shell command for action=test. Runs under the selfdev worktree compile lock."
@@ -547,18 +512,13 @@ impl SelfDevTool {
                     "action": {
                         "type": "string",
                         "enum": [
-                            "enter",
                             "setup",
                             "reload",
                             "status",
                             "find-config"
                         ],
-                        "description": "Action. `enter` spawns a self-dev session (optionally seeded with `prompt`); `setup` checks/installs the dev prerequisites (rust toolchain, git, repo clone); `reload` restarts jcode into a newer installed build; `status` shows build/version state; `find-config` locates jcode config and key paths."
+                        "description": "Action. `setup` checks/installs the dev prerequisites (rust toolchain, git, repo clone); `reload` restarts jcode into a newer installed build; `status` shows build/version state; `find-config` locates jcode config and key paths."
                     },
-                    "prompt": {
-                        "type": "string",
-                        "description": "Optional task to seed the spawned self-dev session when action=enter."
-                    }
                 },
                 "required": ["action"]
             })
@@ -595,7 +555,6 @@ impl Tool for SelfDevTool {
 
         let result = match action.as_str() {
             // Available in every session.
-            "enter" => self.do_enter(params.prompt, &ctx).await,
             "setup" => self.do_setup(&ctx).await,
             "status" => self.do_status().await,
             "find-config" => self.do_find_config(&ctx).await,
@@ -616,18 +575,12 @@ impl Tool for SelfDevTool {
             // Self-dev-only actions: building, testing, and low-level socket
             // access only make sense once you are working on jcode itself.
             "build" => {
-                self.do_build(
-                    params.reason,
-                    params.target,
-                    params.notify,
-                    params.wake,
-                    &ctx,
-                )
-                .await
+                self.do_build(params.reason, params.notify, params.wake, &ctx)
+                    .await
             }
             "build-reload" | "build_reload" => {
                 if is_selfdev {
-                    self.do_build_reload(params.reason, params.target, params.context, &ctx)
+                    self.do_build_reload(params.reason, params.context, &ctx)
                         .await
                 } else {
                     Ok(ToolOutput::new(SelfDevTool::selfdev_only_action_message(
@@ -668,9 +621,9 @@ impl Tool for SelfDevTool {
                 }
             }
             _ => Ok(ToolOutput::new(format!(
-                "Unknown action: {}. In a self-dev session use 'enter', 'setup', 'build', \
+                "Unknown action: {}. In a self-dev session use 'setup', 'build', \
                  'build-reload', 'test', 'cancel-build', 'reload', 'status', 'find-config', \
-                 'socket-info', or 'socket-help'. Outside self-dev mode use 'enter', 'setup', \
+                 'socket-info', or 'socket-help'. Outside self-dev mode use 'setup', \
                  'reload', 'status', or 'find-config'.",
                 action
             ))),
@@ -715,14 +668,11 @@ impl SelfDevTool {
             .unwrap_or(false)
     }
 
-    /// Guidance returned when a self-dev-only action is requested from a regular
-    /// session. Points the agent at `selfdev enter` to get the full toolset.
     fn selfdev_only_action_message(action: &str) -> String {
         format!(
             "`selfdev {action}` is only available inside a self-dev session. \
-             Run `selfdev enter` first (optionally with a `prompt`) to open a \
-             self-dev session, which exposes builds, tests, reloads, and the \
-             debug socket."
+             Start jcode with JCODE_CLIENT_SELFDEV_MODE set to expose builds, \
+             tests, reloads, and the debug socket."
         )
     }
 
@@ -738,15 +688,8 @@ impl SelfDevTool {
         build::get_repo_dir()
     }
 
-    fn launch_binary() -> Result<std::path::PathBuf> {
-        build::client_update_candidate(true)
-            .map(|(path, _label)| path)
-            .or_else(|| std::env::current_exe().ok())
-            .ok_or_else(|| anyhow::anyhow!("Could not resolve jcode executable to launch"))
-    }
-
-    fn build_command(repo_dir: &Path, target: build::SelfDevBuildTarget) -> SelfDevBuildCommand {
-        build::selfdev_build_command_for_target(repo_dir, target)
+    fn build_command(repo_dir: &Path) -> SelfDevBuildCommand {
+        build::selfdev_build_command(repo_dir)
     }
 
     fn build_lock_path(worktree_scope: &str) -> Result<PathBuf> {

@@ -906,6 +906,44 @@ pub fn import_native_credentials_into_account() -> Result<String> {
     })
 }
 
+/// Import an already-authenticated Claude credential into jcode's writable
+/// account store. This never starts an OAuth flow or prompts the user.
+pub fn import_pre_authenticated_credentials() -> Result<String> {
+    let creds = load_native_credentials()
+        .or_else(|_| load_claude_code_credentials())
+        .or_else(|_| load_opencode_credentials())
+        .context(
+            "No pre-authenticated Claude credential was found in the mounted external paths",
+        )?;
+    import_credentials_into_account(creds)
+}
+
+/// Import a Claude Code credential JSON blob supplied over a protected
+/// channel such as stdin.
+pub fn import_pre_authenticated_credentials_blob(content: &str) -> Result<String> {
+    let creds = parse_claude_code_credentials_blob(content)
+        .context("Could not parse the supplied Claude credential JSON")?;
+    import_credentials_into_account(creds)
+}
+
+fn import_credentials_into_account(creds: ClaudeCredentials) -> Result<String> {
+    if creds.refresh_token.trim().is_empty() {
+        anyhow::bail!(
+            "Mounted Claude credentials have no refresh token; refusing a non-durable import"
+        );
+    }
+    let label = login_target_label(None)?;
+    upsert_account(AnthropicAccount {
+        label: label.clone(),
+        access: creds.access_token,
+        refresh: creds.refresh_token,
+        expires: creds.expires_at,
+        email: None,
+        subscription_type: creds.subscription_type,
+        scopes: creds.scopes,
+    })
+}
+
 pub fn load_opencode_credentials() -> Result<ClaudeCredentials> {
     let path = crate::storage::validate_external_auth_file(&opencode_path()?)?;
     let content = std::fs::read_to_string(&path)

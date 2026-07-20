@@ -1,4 +1,3 @@
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -27,30 +26,6 @@ pub struct SelfDevBuildCommand {
     pub program: String,
     pub args: Vec<String>,
     pub display: String,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SelfDevBuildTarget {
-    Auto,
-    Tui,
-    Desktop,
-    All,
-}
-
-impl SelfDevBuildTarget {
-    pub fn parse(value: Option<&str>) -> Result<Self> {
-        match value.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
-            "" | "auto" => Ok(Self::Auto),
-            "tui" | "jcode" => Ok(Self::Tui),
-            "desktop" | "jcode-desktop" => Ok(Self::Desktop),
-            "all" | "both" => Ok(Self::All),
-            other => anyhow::bail!(
-                "invalid selfdev build target `{}`; expected auto, tui, desktop, or all",
-                other
-            ),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]

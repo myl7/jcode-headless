@@ -12,9 +12,7 @@ use super::args::{
 };
 use crate::{provider_catalog, server, session, startup_profile};
 
-use super::{
-    acp, commands, debug, hot_exec, output, provider_init,
-};
+use super::{acp, commands, debug, hot_exec, output, provider_init};
 use provider_init::ProviderChoice;
 
 fn is_file_controlled_debug_client() -> bool {
@@ -69,12 +67,6 @@ fn arm_debug_client_parent_death_signal() {}
 pub(crate) async fn run_main(mut args: Args) -> Result<()> {
     arm_debug_client_parent_death_signal();
     resolve_resume_arg(&mut args)?;
-
-    // One-time config migration: users whose config.toml still carries the old
-    // baked-in `swarm_spawn_mode = "visible"` default get flipped to the
-    // current `inline` default. Cheap (single file read, marker-gated), and it
-    // must run before the config cache is first populated.
-    crate::config::Config::migrate_legacy_swarm_spawn_mode_once();
 
     if let Some(profile_name) = args
         .provider_profile
@@ -212,6 +204,11 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
             debug::run_debug_command(&command, &arg, session, socket, wait).await?;
         }
         Some(Command::Auth(subcmd)) => match subcmd {
+            AuthCommand::Import {
+                provider,
+                stdin,
+                json,
+            } => commands::run_auth_import_command(&provider, stdin, json)?,
             AuthCommand::Status { json } => commands::run_auth_status_command(json)?,
             AuthCommand::Doctor {
                 provider,
@@ -605,38 +602,6 @@ fn map_cloud_sessions_subcommand(
                 helper: jade.helper,
             }
         }
-        CloudSessionsCommand::Dashboard {
-            limit,
-            output,
-            open,
-            with_view,
-            jade,
-        } => commands::CloudSessionsSubcommand::Dashboard {
-            limit,
-            output,
-            open,
-            with_view,
-            user_id: jade.user_id,
-            profile: jade.profile,
-            region: jade.region,
-            helper: jade.helper,
-        },
-        CloudSessionsCommand::View {
-            session_id,
-            format,
-            output,
-            open,
-            jade,
-        } => commands::CloudSessionsSubcommand::View {
-            session_id,
-            format: format.as_arg().to_string(),
-            output,
-            open,
-            user_id: jade.user_id,
-            profile: jade.profile,
-            region: jade.region,
-            helper: jade.helper,
-        },
     }
 }
 

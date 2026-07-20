@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::process::Command as ProcessCommand;
 
-use crate::{build, logging, perf, server, startup_profile, storage, telemetry, update};
+use crate::{build, logging, server, startup_profile, storage, telemetry, update};
 
 use super::{
     args::{Args, Command},
@@ -10,6 +10,10 @@ use super::{
 };
 
 pub async fn run() -> Result<()> {
+    // This distribution has no interactive UI or login surface. Provider
+    // initialization must never prompt and only consumes injected credentials.
+    crate::env::set_var("JCODE_NON_INTERACTIVE", "1");
+
     startup_profile::init();
 
     terminal::install_panic_hook();
@@ -83,9 +87,6 @@ pub async fn run() -> Result<()> {
     storage::harden_user_config_permissions();
     startup_profile::mark("perm_harden");
 
-    perf::init_background();
-    startup_profile::mark("perf_init");
-
     telemetry::record_install_if_first_run();
     telemetry::record_upgrade_if_needed();
     startup_profile::mark("telemetry_check");
@@ -152,16 +153,12 @@ pub fn register_external_provider_runtimes() {
     crate::provider::external::register_standard_openrouter_catalog_refresh(
         jcode_provider_openrouter_runtime::maybe_schedule_standard_openrouter_catalog_refresh,
     );
-    // API-backed OpenAI routes use Codex/platform credentials. The runtime is
-    // still registered without them so browser-backed ChatGPT models remain
-    // usable through the logged-in Firefox session.
+    // OpenAI routes require a mounted Codex subscription credential or an API key.
     crate::provider::external::register_external_provider_fallible(
         crate::provider::external::OPENAI_RUNTIME,
         || {
-            let provider = match crate::auth::codex::load_credentials() {
-                Ok(credentials) => jcode_provider_openai_runtime::OpenAIProvider::new(credentials),
-                Err(_) => jcode_provider_openai_runtime::OpenAIProvider::new_browser_only(),
-            };
+            let credentials = crate::auth::codex::load_credentials().ok()?;
+            let provider = jcode_provider_openai_runtime::OpenAIProvider::new(credentials);
             Some(std::sync::Arc::new(provider) as std::sync::Arc<dyn crate::provider::Provider>)
         },
     );
@@ -326,13 +323,13 @@ mod tests {
 
     #[test]
     fn auto_install_allowed_without_live_terminal() {
-        let args = parse_args(&["jcode", "login"]);
+        let args = parse_args(&["jcode", "version"]);
         assert!(should_auto_install_update(&args));
     }
 
     #[test]
     fn auto_install_allowed_with_live_terminal_attached() {
-        let args = parse_args(&["jcode", "login"]);
+        let args = parse_args(&["jcode", "version"]);
         assert!(should_auto_install_update(&args));
     }
 

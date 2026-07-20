@@ -1,7 +1,6 @@
 use super::{
-    AmbientConfig, Config, DiffDisplayMode, DisplayConfig, LatexRenderingMode, ProviderConfig,
-    SessionPickerResumeAction, SwarmSpawnMode, ToolConfig, config_env_fingerprint,
-    populate_context_limits_from_config_ref,
+    Config, DiffDisplayMode, DisplayConfig, LatexRenderingMode, ProviderConfig, SwarmSpawnMode,
+    ToolConfig, config_env_fingerprint, populate_context_limits_from_config_ref,
 };
 use std::ffi::OsString;
 use std::path::Path;
@@ -36,10 +35,10 @@ fn preserve_reasoning_context_defaults_to_enabled() {
 }
 
 #[test]
-fn swarm_spawn_mode_defaults_to_inline() {
+fn swarm_spawn_mode_defaults_to_headless() {
     assert_eq!(
         Config::default().agents.swarm_spawn_mode,
-        SwarmSpawnMode::Inline
+        SwarmSpawnMode::Headless
     );
 }
 
@@ -114,35 +113,9 @@ fn swarm_max_concurrent_agents_parses_and_allows_zero_for_unbounded() {
 }
 
 #[test]
-fn swarm_spawn_mode_parses_supported_values() {
-    let cfg: Config = toml::from_str("[agents]\nswarm_spawn_mode = \"headless\"\n")
-        .expect("headless swarm_spawn_mode should parse");
-    assert_eq!(cfg.agents.swarm_spawn_mode, SwarmSpawnMode::Headless);
-
-    let cfg: Config = toml::from_str("[agents]\nswarm_spawn_mode = \"auto\"\n")
-        .expect("auto swarm_spawn_mode should parse");
-    assert_eq!(cfg.agents.swarm_spawn_mode, SwarmSpawnMode::Auto);
-
-    let cfg: Config = toml::from_str("[agents]\nswarm_spawn_mode = \"visible\"\n")
-        .expect("visible swarm_spawn_mode should parse");
-    assert_eq!(cfg.agents.swarm_spawn_mode, SwarmSpawnMode::Visible);
-}
-
-#[test]
 fn swarm_spawn_mode_rejects_invalid_values() {
     let result = toml::from_str::<Config>("[agents]\nswarm_spawn_mode = \"background\"\n");
     assert!(result.is_err());
-}
-
-#[test]
-fn swarm_spawn_mode_as_str_round_trips() {
-    for mode in [
-        SwarmSpawnMode::Visible,
-        SwarmSpawnMode::Headless,
-        SwarmSpawnMode::Auto,
-    ] {
-        assert_eq!(SwarmSpawnMode::parse(mode.as_str()), Some(mode));
-    }
 }
 
 #[test]
@@ -178,24 +151,6 @@ fn test_env_override_swarm_model() {
     assert_eq!(cfg.agents.swarm_model, None);
 
     restore_env_var("JCODE_SWARM_MODEL", prev);
-}
-
-#[test]
-fn spawn_hook_defaults_to_none_and_parses_from_toml() {
-    assert_eq!(Config::default().terminal.spawn_hook, None);
-
-    let cfg: Config = toml::from_str("[terminal]\nspawn_hook = \"tmux new-window\"\n")
-        .expect("spawn_hook should parse");
-    assert_eq!(cfg.terminal.spawn_hook.as_deref(), Some("tmux new-window"));
-}
-
-#[test]
-fn terminal_preferred_defaults_to_none_and_parses_from_toml() {
-    assert_eq!(Config::default().terminal.preferred, None);
-
-    let cfg: Config =
-        toml::from_str("[terminal]\npreferred = \"ghostty\"\n").expect("preferred should parse");
-    assert_eq!(cfg.terminal.preferred.as_deref(), Some("ghostty"));
 }
 
 #[test]
@@ -241,49 +196,6 @@ fn test_env_override_lifecycle_hooks() {
 
     restore_env_var("JCODE_HOOK_TURN_END", prev_turn_end);
     restore_env_var("JCODE_HOOK_PRE_TOOL_TIMEOUT_MS", prev_timeout);
-}
-
-#[test]
-fn test_env_override_spawn_hook() {
-    let _guard = crate::storage::lock_test_env();
-    let prev = std::env::var_os("JCODE_SPAWN_HOOK");
-    crate::env::set_var("JCODE_SPAWN_HOOK", "kitty @ launch --type=tab --");
-
-    let mut cfg = Config::default();
-    cfg.apply_env_overrides();
-    assert_eq!(
-        cfg.terminal.spawn_hook.as_deref(),
-        Some("kitty @ launch --type=tab --")
-    );
-
-    // Empty env value disables a config-file hook.
-    crate::env::set_var("JCODE_SPAWN_HOOK", "  ");
-    let mut cfg = Config::default();
-    cfg.terminal.spawn_hook = Some("tmux new-window".to_string());
-    cfg.apply_env_overrides();
-    assert_eq!(cfg.terminal.spawn_hook, None);
-
-    restore_env_var("JCODE_SPAWN_HOOK", prev);
-}
-
-#[test]
-fn test_env_override_focus_hook() {
-    let _guard = crate::storage::lock_test_env();
-    let prev = std::env::var_os("JCODE_FOCUS_HOOK");
-    crate::env::set_var("JCODE_FOCUS_HOOK", "niri-focus-jcode");
-
-    let mut cfg = Config::default();
-    cfg.apply_env_overrides();
-    assert_eq!(cfg.terminal.focus_hook.as_deref(), Some("niri-focus-jcode"));
-
-    // Empty env value disables a config-file hook.
-    crate::env::set_var("JCODE_FOCUS_HOOK", "");
-    let mut cfg = Config::default();
-    cfg.terminal.focus_hook = Some("wmctrl -a".to_string());
-    cfg.apply_env_overrides();
-    assert_eq!(cfg.terminal.focus_hook, None);
-
-    restore_env_var("JCODE_FOCUS_HOOK", prev);
 }
 
 #[test]
@@ -484,7 +396,7 @@ fn test_generated_default_config_uses_low_openai_reasoning_effort() {
     );
     assert!(
         content.contains("[agents]") && content.contains("swarm_spawn_mode = \"inline\""),
-        "generated default config should document agent spawn defaults"
+        "generated default config should document the headless agent spawn default"
     );
     assert!(
         content.contains("memory_model = \"gpt-5.6-luna\"")
@@ -492,26 +404,10 @@ fn test_generated_default_config_uses_low_openai_reasoning_effort() {
         "generated default config should document the Luna memory sidecar default"
     );
 
-    // Effort keys come from the per-platform keybinding registry; the template
-    // placeholders must always be substituted.
-    assert!(
-        !content.contains("@EFFORT_INCREASE@") && !content.contains("@EFFORT_DECREASE@"),
-        "generated default config should substitute effort key placeholders"
-    );
-    let expected_increase = if cfg!(target_os = "macos") {
-        "effort_increase = \"cmd+right\""
-    } else {
-        "effort_increase = \"alt+right\""
-    };
-    assert!(
-        content.contains(expected_increase),
-        "generated default config should use the platform effort_increase default"
-    );
-
     // The generated file must always be valid TOML for the current Config schema.
     let parsed: Config =
         toml::from_str(&content).expect("generated default config should parse as Config");
-    assert_eq!(parsed.agents.swarm_spawn_mode, SwarmSpawnMode::Inline);
+    assert_eq!(parsed.agents.swarm_spawn_mode, SwarmSpawnMode::Headless);
 
     if let Some(prev) = prev_home {
         crate::env::set_var("JCODE_HOME", prev);
@@ -650,11 +546,6 @@ fn cached_external_auth_trust_observes_manual_revocation() {
 }
 
 #[test]
-fn test_ambient_visible_defaults_to_true() {
-    assert!(AmbientConfig::default().visible);
-}
-
-#[test]
 fn test_display_auto_server_reload_defaults_to_true() {
     assert!(DisplayConfig::default().auto_server_reload);
 }
@@ -694,34 +585,6 @@ fn test_copy_badge_alt_label_defaults_to_auto_and_deserializes() {
     .expect("config should deserialize");
 
     assert_eq!(cfg.display.copy_badge_alt_label, "Option");
-}
-
-#[test]
-fn test_session_picker_resume_action_defaults_to_current_terminal() {
-    assert_eq!(
-        Config::default().keybindings.session_picker_enter,
-        SessionPickerResumeAction::CurrentTerminal
-    );
-    assert_eq!(
-        SessionPickerResumeAction::CurrentTerminal.alternate(),
-        SessionPickerResumeAction::NewTerminal
-    );
-}
-
-#[test]
-fn test_session_picker_resume_action_deserializes_kebab_case() {
-    let cfg: Config = toml::from_str(
-        r#"
-        [keybindings]
-        session_picker_enter = "current-terminal"
-        "#,
-    )
-    .expect("config should deserialize");
-
-    assert_eq!(
-        cfg.keybindings.session_picker_enter,
-        SessionPickerResumeAction::CurrentTerminal
-    );
 }
 
 #[test]
@@ -990,74 +853,4 @@ fn populate_context_limits_from_config_seeds_qualified_runtime_model_shapes() {
         Some(131_072),
         "profile-qualified slash-path spec must resolve the configured context_window"
     );
-}
-
-#[test]
-fn migrate_legacy_swarm_spawn_mode_flips_visible_to_inline_once() {
-    let _guard = crate::storage::lock_test_env();
-    let prev_home = std::env::var_os("JCODE_HOME");
-    let dir = tempfile::TempDir::new().expect("tempdir");
-    crate::env::set_var("JCODE_HOME", dir.path());
-
-    let config_path = dir.path().join("config.toml");
-    let original = "[display]\ncentered = true\n\n[agents]\nswarm_spawn_mode = \"visible\"\nswarm_max_concurrent_agents = 32\n";
-    std::fs::write(&config_path, original).expect("write config");
-
-    assert!(
-        Config::migrate_legacy_swarm_spawn_mode_once(),
-        "migration should rewrite a legacy visible spawn mode"
-    );
-    let migrated = std::fs::read_to_string(&config_path).expect("read config");
-    assert!(
-        migrated.contains("swarm_spawn_mode = \"inline\""),
-        "spawn mode should be flipped to inline: {migrated}"
-    );
-    // The rest of the file is untouched.
-    assert!(migrated.contains("centered = true"));
-    assert!(migrated.contains("swarm_max_concurrent_agents = 32"));
-    let parsed: Config = toml::from_str(&migrated).expect("migrated config parses");
-    assert_eq!(parsed.agents.swarm_spawn_mode, SwarmSpawnMode::Inline);
-
-    // Marker written: a later explicit "visible" survives future launches.
-    std::fs::write(&config_path, "[agents]\nswarm_spawn_mode = \"visible\"\n")
-        .expect("write config");
-    assert!(
-        !Config::migrate_legacy_swarm_spawn_mode_once(),
-        "migration must run at most once"
-    );
-    let content = std::fs::read_to_string(&config_path).expect("read config");
-    assert!(content.contains("swarm_spawn_mode = \"visible\""));
-
-    restore_env_var("JCODE_HOME", prev_home);
-}
-
-#[test]
-fn migrate_legacy_swarm_spawn_mode_noops_without_visible_value() {
-    let _guard = crate::storage::lock_test_env();
-    let prev_home = std::env::var_os("JCODE_HOME");
-    let dir = tempfile::TempDir::new().expect("tempdir");
-    crate::env::set_var("JCODE_HOME", dir.path());
-
-    // No config file at all: no migration, but the marker is written.
-    assert!(!Config::migrate_legacy_swarm_spawn_mode_once());
-    assert!(
-        dir.path()
-            .join("migrations")
-            .join("swarm-spawn-mode-inline")
-            .exists(),
-        "marker should be written even when there is nothing to migrate"
-    );
-
-    // Explicit non-visible values are never rewritten (marker already set,
-    // but check the matcher too with a fresh home).
-    let dir2 = tempfile::TempDir::new().expect("tempdir");
-    crate::env::set_var("JCODE_HOME", dir2.path());
-    let config_path = dir2.path().join("config.toml");
-    std::fs::write(&config_path, "[agents]\nswarm_spawn_mode = \"headless\"\n")
-        .expect("write config");
-    assert!(!Config::migrate_legacy_swarm_spawn_mode_once());
-    let content = std::fs::read_to_string(&config_path).expect("read config");
-    assert!(content.contains("swarm_spawn_mode = \"headless\""));
-
-    restore_env_var("JCODE_HOME", prev_home);
 }

@@ -333,8 +333,7 @@ pub fn load_api_key() -> Result<String> {
     }
 
     anyhow::bail!(
-        "Cursor API key not found. Set CURSOR_API_KEY env var, \
-         or run `/login cursor` to configure."
+        "Cursor API key not found. Set CURSOR_API_KEY or provision cursor.env in JCODE_HOME."
     )
 }
 
@@ -598,7 +597,7 @@ async fn refresh_direct_access_token(
             .context("Failed to decode Cursor token refresh response")?;
         if parsed.should_logout || parsed.access_token.trim().is_empty() {
             anyhow::bail!(
-                "Cursor refresh token was rejected; Cursor requested logout/login. Re-run Cursor login, then retry auth-test."
+                "Cursor refresh token was rejected. Replace the mounted Cursor credential, then retry auth-test."
             );
         }
         Ok(CursorDirectTokens {

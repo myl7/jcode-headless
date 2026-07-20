@@ -8,9 +8,9 @@ pub use paths::{
     current_binary_build_time_string, current_binary_built_at, find_dev_binary,
     find_repo_in_ancestors, get_repo_dir, is_jcode_repo, launcher_binary_path, launcher_dir,
     preferred_reload_candidate, release_binary_path, resolve_binary_payload, run_selfdev_build,
-    selfdev_binary_path, selfdev_build_command, selfdev_build_command_for_target,
-    shared_server_update_candidate, update_launcher_symlink_to_current,
-    update_launcher_symlink_to_stable, version_matches_installed_channel,
+    selfdev_binary_path, selfdev_build_command, shared_server_update_candidate,
+    update_launcher_symlink_to_current, update_launcher_symlink_to_stable,
+    version_matches_installed_channel,
 };
 pub use source_state::{
     current_build_info, current_git_diff, current_git_hash, current_git_hash_full,
@@ -39,8 +39,7 @@ use std::time::{Duration, Instant};
 
 pub use jcode_selfdev_types::{
     BinaryChoice, BinaryVersionReport, BuildInfo, CanaryStatus, CrashInfo, DevBinarySourceMetadata,
-    MigrationContext, PendingActivation, PublishedBuild, SelfDevBuildCommand, SelfDevBuildTarget,
-    SourceState,
+    MigrationContext, PendingActivation, PublishedBuild, SelfDevBuildCommand, SourceState,
 };
 
 /// Manifest tracking build versions and their status
@@ -562,7 +561,6 @@ pub fn smoke_test_server_binary(binary: &Path) -> Result<()> {
         .arg(&socket_path)
         .env("JCODE_NON_INTERACTIVE", "1")
         .env("JCODE_RUNTIME_DIR", &runtime_dir)
-        .env("JCODE_GATEWAY_ENABLED", "0")
         .env("JCODE_TEMP_SERVER", "1")
         .env("JCODE_SERVER_OWNER_PID", std::process::id().to_string())
         .env("JCODE_TEMP_SERVER_IDLE_SECS", "300")

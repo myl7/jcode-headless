@@ -409,10 +409,8 @@ fn schema_only_advertises_core_selfdev_fields() {
         .expect("selfdev schema should have properties");
 
     assert!(props.contains_key("action"));
-    assert!(props.contains_key("prompt"));
     assert!(props.contains_key("context"));
     assert!(props.contains_key("reason"));
-    assert!(props.contains_key("target"));
     assert!(props.contains_key("command"));
     assert!(props.contains_key("request_id"));
     assert!(props.contains_key("task_id"));
@@ -426,7 +424,6 @@ fn schema_only_advertises_core_selfdev_fields() {
         .filter_map(|v| v.as_str())
         .collect();
     for expected in [
-        "enter",
         "setup",
         "build",
         "build-reload",
@@ -445,7 +442,7 @@ fn schema_only_advertises_core_selfdev_fields() {
 #[test]
 fn non_selfdev_schema_only_exposes_onramp_actions() {
     // The default schema (what a regular session advertises) is the on-ramp
-    // surface: no build/test/socket actions, only enter/setup/reload/status/
+    // surface: no build/test/socket actions, only setup/reload/status/
     // find-config.
     let default_schema = SelfDevTool::new().parameters_schema();
     let onramp_schema = SelfDevTool::schema_for(false);
@@ -455,10 +452,8 @@ fn non_selfdev_schema_only_exposes_onramp_actions() {
         .as_object()
         .expect("schema properties");
     assert!(props.contains_key("action"));
-    assert!(props.contains_key("prompt"));
     // Build/test-only fields are hidden outside self-dev mode.
     assert!(!props.contains_key("reason"));
-    assert!(!props.contains_key("target"));
     assert!(!props.contains_key("command"));
     assert!(!props.contains_key("request_id"));
     assert!(!props.contains_key("task_id"));
@@ -471,10 +466,7 @@ fn non_selfdev_schema_only_exposes_onramp_actions() {
         .collect();
     let mut sorted = actions.clone();
     sorted.sort_unstable();
-    assert_eq!(
-        sorted,
-        vec!["enter", "find-config", "reload", "setup", "status"]
-    );
+    assert_eq!(sorted, vec!["find-config", "reload", "setup", "status"]);
     for hidden in [
         "build",
         "build-reload",
@@ -566,114 +558,6 @@ fn reload_repo_resolver_uses_working_dir_when_primary_detection_fails() {
 }
 
 #[tokio::test]
-async fn enter_creates_selfdev_session_in_test_mode() {
-    let _storage_guard = crate::storage::lock_test_env();
-    let _lock = lock_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    let _home_guard = EnvVarGuard::set("JCODE_HOME", temp_home.path());
-    let _test_guard = EnvVarGuard::set("JCODE_TEST_SESSION", "1");
-    let repo = create_repo_fixture();
-
-    let mut parent = session::Session::create(None, Some("Origin Session".to_string()));
-    parent.working_dir = Some("/tmp/origin-project".to_string());
-    parent.model = Some("gpt-test".to_string());
-    parent.provider_key = Some("openai".to_string());
-    parent.subagent_model = Some("gpt-subagent".to_string());
-    parent.add_message(
-        crate::message::Role::User,
-        vec![crate::message::ContentBlock::Text {
-            text: "hello from parent".to_string(),
-            cache_control: None,
-        }],
-    );
-    parent.compaction = Some(session::StoredCompactionState {
-        summary_text: "summary".to_string(),
-        openai_encrypted_content: None,
-        covers_up_to_turn: 1,
-        original_turn_count: 1,
-        compacted_count: 1,
-    });
-    parent.record_replay_display_message("system", None, "remember this context");
-    parent.save().expect("save parent session");
-
-    let tool = SelfDevTool::new();
-    let ctx = create_test_context(&parent.id, Some(repo.path().to_path_buf()));
-    let output = tool
-        .execute(
-            json!({"action": "enter", "prompt": "Work on jcode itself"}),
-            ctx,
-        )
-        .await
-        .expect("selfdev enter should succeed in test mode");
-
-    assert!(output.output.contains("Created self-dev session"));
-    assert!(
-        output
-            .output
-            .contains("Test mode skipped launching a new terminal")
-    );
-    assert!(
-        output.output.contains("Seed prompt captured"),
-        "test-mode enter should still report captured prompt"
-    );
-
-    let metadata = output.metadata.expect("metadata");
-    let session_id = metadata["session_id"]
-        .as_str()
-        .expect("session id metadata");
-    assert_eq!(metadata["inherited_context"].as_bool(), Some(true));
-    let session = session::Session::load(session_id).expect("load spawned session");
-    assert!(
-        session.is_canary,
-        "spawned session should be canary/self-dev"
-    );
-    assert_eq!(session.testing_build.as_deref(), Some("self-dev"));
-    assert_eq!(
-        session.working_dir.as_deref(),
-        Some(repo.path().to_string_lossy().as_ref())
-    );
-    assert_eq!(session.parent_id.as_deref(), Some(parent.id.as_str()));
-    assert_eq!(session.messages.len(), parent.messages.len());
-    assert_eq!(session.messages[0].content_preview(), "hello from parent");
-    assert_eq!(session.compaction, parent.compaction);
-    assert_eq!(session.model, parent.model);
-    assert_eq!(session.provider_key, parent.provider_key);
-    assert_eq!(session.subagent_model, parent.subagent_model);
-    assert_eq!(session.replay_events, parent.replay_events);
-}
-
-#[tokio::test]
-async fn enter_falls_back_to_fresh_session_when_parent_missing() {
-    let _storage_guard = crate::storage::lock_test_env();
-    let _lock = lock_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    let _home_guard = EnvVarGuard::set("JCODE_HOME", temp_home.path());
-    let _test_guard = EnvVarGuard::set("JCODE_TEST_SESSION", "1");
-    let repo = create_repo_fixture();
-
-    let tool = SelfDevTool::new();
-    let ctx = create_test_context("missing-parent", Some(repo.path().to_path_buf()));
-    let output = tool
-        .execute(json!({"action": "enter"}), ctx)
-        .await
-        .expect("selfdev enter should succeed without a persisted parent session");
-
-    let metadata = output.metadata.expect("metadata");
-    let session_id = metadata["session_id"]
-        .as_str()
-        .expect("session id metadata");
-    assert_eq!(metadata["inherited_context"].as_bool(), Some(false));
-
-    let session = session::Session::load(session_id).expect("load spawned session");
-    assert!(session.messages.is_empty());
-    assert!(session.parent_id.is_none());
-    assert_eq!(
-        session.working_dir.as_deref(),
-        Some(repo.path().to_string_lossy().as_ref())
-    );
-}
-
-#[tokio::test]
 async fn reload_in_non_selfdev_session_is_upgrade_in_place() {
     let _storage_guard = crate::storage::lock_test_env();
     let _lock = lock_env();
@@ -725,7 +609,7 @@ async fn socket_actions_require_selfdev_session() {
                 .contains("only available inside a self-dev session"),
             "{action} should be gated"
         );
-        assert!(output.output.contains("selfdev enter"));
+        assert!(output.output.contains("JCODE_CLIENT_SELFDEV_MODE"));
     }
 }
 

@@ -840,13 +840,6 @@ pub(super) async fn handle_client(
                             let _ = client_event_tx.send(ServerEvent::BatchProgress { progress });
                         }
                     }
-                    Ok(BusEvent::SidePanelUpdated(update)) => {
-                        if update.session_id == client_session_id {
-                            let _ = client_event_tx.send(ServerEvent::SidePanelState {
-                                snapshot: update.snapshot,
-                            });
-                        }
-                    }
                     Ok(BusEvent::CompactionFinished) => {
                         let agent = Arc::clone(&agent);
                         let tx = client_event_tx.clone();
@@ -1952,36 +1945,6 @@ pub(super) async fn handle_client(
                     },
                 )
                 .await;
-            }
-
-            Request::Transcript {
-                id,
-                text,
-                mode,
-                session_id,
-            } => {
-                match super::debug::inject_transcript(
-                    id,
-                    text,
-                    mode,
-                    session_id,
-                    &client_connections,
-                    &client_debug_state,
-                    &swarm_members,
-                )
-                .await
-                {
-                    Ok(event) => {
-                        let _ = client_event_tx.send(event);
-                    }
-                    Err(error) => {
-                        let _ = client_event_tx.send(ServerEvent::Error {
-                            id,
-                            message: error.to_string(),
-                            retry_after_secs: None,
-                        });
-                    }
-                }
             }
 
             Request::InputShell { id, command } => {

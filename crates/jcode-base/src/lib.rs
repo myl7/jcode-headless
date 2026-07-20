@@ -19,7 +19,6 @@
 
 pub mod auth;
 pub mod background;
-pub mod browser;
 pub mod bus;
 pub mod cache_invalidation;
 pub mod cache_tracker;
@@ -29,15 +28,12 @@ pub mod compaction;
 pub mod config;
 pub mod console;
 pub mod copilot_usage;
-pub mod dictation;
 #[cfg(feature = "embeddings")]
 pub mod embedding;
 pub mod embedding_backend;
 #[cfg(not(feature = "embeddings"))]
 pub mod embedding_stub;
 pub mod env;
-pub mod gateway;
-pub mod generated_image;
 pub mod github;
 pub mod gmail;
 pub mod goal;
@@ -46,7 +42,6 @@ pub mod id;
 pub mod import;
 pub mod live_tests;
 pub mod logging;
-pub mod login_qr;
 pub mod mcp;
 pub mod memory;
 pub mod memory_agent;
@@ -70,11 +65,9 @@ pub mod provider_catalog;
 pub mod registry;
 pub mod runtime_memory_log;
 pub mod safety;
-pub mod secret_input;
 pub mod session;
 pub mod session_list_cache;
 pub mod session_metrics;
-pub mod side_panel;
 pub mod sidecar;
 pub mod skill;
 pub mod soft_interrupt_store;
@@ -87,7 +80,6 @@ pub mod telegram;
 pub mod telemetry {
     pub use jcode_telemetry_core::*;
 }
-pub mod terminal_launch;
 pub mod todo;
 pub mod transport;
 pub mod usage;

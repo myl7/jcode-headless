@@ -198,45 +198,6 @@ fn save_and_load_github_token() -> Result<()> {
 }
 
 #[test]
-fn save_github_token_creates_config_dir() -> Result<()> {
-    let _guard = crate::storage::lock_test_env();
-    let dir = TempDir::new().map_err(|e| anyhow!(e))?;
-    let config_dir = dir.path().join("github-copilot");
-    let prev_jcode_home = std::env::var_os("JCODE_HOME");
-    let prev_xdg_config_home = std::env::var_os("XDG_CONFIG_HOME");
-
-    crate::env::remove_var("JCODE_HOME");
-    crate::env::set_var(
-        "XDG_CONFIG_HOME",
-        dir.path()
-            .to_str()
-            .ok_or_else(|| anyhow!("temp dir path should be valid UTF-8"))?,
-    );
-
-    let result = save_github_token("gho_newtoken", "testuser");
-    assert!(result.is_ok());
-
-    let hosts_path = config_dir.join("hosts.json");
-    assert!(hosts_path.exists());
-
-    let loaded = load_token_from_json(&hosts_path)?;
-    assert_eq!(loaded, "gho_newtoken");
-
-    if let Some(prev) = prev_jcode_home {
-        crate::env::set_var("JCODE_HOME", prev);
-    } else {
-        crate::env::remove_var("JCODE_HOME");
-    }
-
-    if let Some(prev) = prev_xdg_config_home {
-        crate::env::set_var("XDG_CONFIG_HOME", prev);
-    } else {
-        crate::env::remove_var("XDG_CONFIG_HOME");
-    }
-    Ok(())
-}
-
-#[test]
 fn legacy_copilot_config_dir_uses_jcode_home_external_dir() -> Result<()> {
     let _guard = crate::storage::lock_test_env();
     let dir = TempDir::new().map_err(|e| anyhow!(e))?;
@@ -256,41 +217,6 @@ fn legacy_copilot_config_dir_uses_jcode_home_external_dir() -> Result<()> {
         crate::env::set_var("JCODE_HOME", prev);
     } else {
         crate::env::remove_var("JCODE_HOME");
-    }
-    Ok(())
-}
-
-#[test]
-fn save_github_token_makes_future_loads_available() -> Result<()> {
-    let _guard = crate::storage::lock_test_env();
-    let dir = TempDir::new().map_err(|e| anyhow!(e))?;
-    let prev_jcode_home = std::env::var_os("JCODE_HOME");
-    let prev_xdg_config_home = std::env::var_os("XDG_CONFIG_HOME");
-
-    crate::env::set_var("JCODE_HOME", dir.path());
-    crate::env::remove_var("XDG_CONFIG_HOME");
-
-    save_github_token("gho_persisted_token", "testuser")?;
-
-    let hosts_path = ExternalCopilotAuthSource::HostsJson.path();
-    assert!(
-        crate::config::Config::external_auth_source_allowed_for_path(
-            COPILOT_HOSTS_AUTH_SOURCE_ID,
-            &hosts_path
-        )
-    );
-    assert_eq!(load_github_token()?, "gho_persisted_token");
-
-    if let Some(prev) = prev_jcode_home {
-        crate::env::set_var("JCODE_HOME", prev);
-    } else {
-        crate::env::remove_var("JCODE_HOME");
-    }
-
-    if let Some(prev) = prev_xdg_config_home {
-        crate::env::set_var("XDG_CONFIG_HOME", prev);
-    } else {
-        crate::env::remove_var("XDG_CONFIG_HOME");
     }
     Ok(())
 }
@@ -380,70 +306,6 @@ fn copilot_account_type_display() {
     assert_eq!(CopilotAccountType::Business.to_string(), "business");
     assert_eq!(CopilotAccountType::Enterprise.to_string(), "enterprise");
     assert_eq!(CopilotAccountType::Unknown.to_string(), "unknown");
-}
-
-#[test]
-fn device_code_response_deserialize() -> Result<()> {
-    let json = r#"{
-            "device_code": "dc_1234",
-            "user_code": "ABCD-1234",
-            "verification_uri": "https://github.com/login/device",
-            "expires_in": 900,
-            "interval": 5
-        }"#;
-    let resp: DeviceCodeResponse = serde_json::from_str(json)?;
-    assert_eq!(resp.device_code, "dc_1234");
-    assert_eq!(resp.user_code, "ABCD-1234");
-    assert_eq!(resp.verification_uri, "https://github.com/login/device");
-    assert_eq!(resp.expires_in, 900);
-    assert_eq!(resp.interval, 5);
-    Ok(())
-}
-
-#[test]
-fn access_token_response_success() -> Result<()> {
-    let json = r#"{
-            "access_token": "gho_xxx123",
-            "token_type": "bearer",
-            "scope": "read:user"
-        }"#;
-    let resp: AccessTokenResponse = serde_json::from_str(json)?;
-    assert_eq!(
-        resp.access_token
-            .ok_or_else(|| anyhow!("missing access token"))?,
-        "gho_xxx123"
-    );
-    assert!(resp.error.is_none());
-    Ok(())
-}
-
-#[test]
-fn access_token_response_pending() -> Result<()> {
-    let json = r#"{
-            "error": "authorization_pending",
-            "error_description": "The authorization request is still pending."
-        }"#;
-    let resp: AccessTokenResponse = serde_json::from_str(json)?;
-    assert!(resp.access_token.is_none());
-    assert_eq!(
-        resp.error.ok_or_else(|| anyhow!("missing error"))?,
-        "authorization_pending"
-    );
-    Ok(())
-}
-
-#[test]
-fn access_token_response_expired() -> Result<()> {
-    let json = r#"{
-            "error": "expired_token",
-            "error_description": "The device code has expired."
-        }"#;
-    let resp: AccessTokenResponse = serde_json::from_str(json)?;
-    assert_eq!(
-        resp.error.ok_or_else(|| anyhow!("missing error"))?,
-        "expired_token"
-    );
-    Ok(())
 }
 
 #[test]

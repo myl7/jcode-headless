@@ -75,7 +75,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Claude credentials not available. Run `claude` to log in."
+                        "Claude credentials not available in JCODE_HOME."
                     ))
                 }
             }
@@ -86,7 +86,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "OpenAI credentials not available. Run `jcode login --provider openai` to log in."
+                        "OpenAI credentials not available in JCODE_HOME."
                     ))
                 }
             }
@@ -102,7 +102,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "GitHub Copilot is not available. Run `jcode login --provider copilot`."
+                        "GitHub Copilot credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -114,7 +114,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Antigravity is not available. Run `jcode login --provider antigravity`."
+                        "Antigravity credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -130,7 +130,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Gemini is not available. Run `jcode login --provider gemini`."
+                        "Gemini credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -146,7 +146,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Cursor is not available. Run `jcode login --provider cursor`."
+                        "Cursor credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -210,7 +210,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Claude credentials not available. Run `claude` to log in."
+                        "Claude credentials not available in JCODE_HOME."
                     ))
                 }
             }
@@ -227,7 +227,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "OpenAI credentials not available. Run `jcode login --provider openai` to log in."
+                        "OpenAI credentials not available in JCODE_HOME."
                     ))
                 }
             }
@@ -249,7 +249,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "GitHub Copilot is not available. Run `jcode login --provider copilot`."
+                        "GitHub Copilot credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -267,7 +267,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Antigravity is not available. Run `jcode login --provider antigravity`."
+                        "Antigravity credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -289,7 +289,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Gemini is not available. Run `jcode login --provider gemini`."
+                        "Gemini credentials are not available in JCODE_HOME."
                     ))
                 }
             }
@@ -311,7 +311,7 @@ impl MultiProvider {
                         .await
                 } else {
                     Err(anyhow::anyhow!(
-                        "Cursor is not available. Run `jcode login --provider cursor`."
+                        "Cursor credentials are not available in JCODE_HOME."
                     ))
                 }
             }

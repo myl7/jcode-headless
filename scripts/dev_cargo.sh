@@ -325,7 +325,7 @@ cpu_count() {
 # builds (e.g. several self-dev agents on one machine) self-throttle instead of
 # all assuming the full core count and tripping earlyoom/OOM.
 #
-# After the monolith was split into the jcode-base/app-core/tui/cli crate DAG,
+# After the monolith was split into the jcode-base/app-core/cli crate DAG,
 # the largest single rustc unit is jcode-base, which has grown back to a
 # measured ~1.6 GiB RSS peak (selfdev profile, sampled VmRSS while building the
 # lib), down from the old 2.5-3 GiB monolith but above the original ~1.28 GiB
@@ -393,7 +393,7 @@ select_build_jobs() {
 # `jcode-build-meta/build.rs` deliberately does NOT declare `.git/HEAD`/`.git/index`
 # as `rerun-if-changed` inputs, because their mtimes change on every `git add`,
 # `git status`, commit, and concurrent-agent git op -- which would force a
-# full-tree recompile (base -> app-core -> tui -> cli) on every incremental
+# full-tree recompile (base -> app-core -> cli) on every incremental
 # build. The trade-off was that after a commit the binary kept embedding the
 # previous short hash, so the self-dev publish guard rejected it with
 # "binary was built from git hash X, but source state is Y" until someone
@@ -471,7 +471,7 @@ maybe_configure_low_memory_selfdev() {
 }
 
 # Enable rustc's parallel front-end (`-Zthreads`) for iterative dev/selfdev/test
-# builds. The jcode monoliths (jcode-base/app-core/tui) are ~80% single-threaded
+# builds. The jcode monoliths (jcode-base/app-core) are mostly single-threaded
 # front-end (type-check + borrow-check + monomorphization collection); at
 # opt-level 0 that front-end, not codegen, dominates wall time. The parallel
 # front-end is a nightly-only `-Z` flag, so this is gated on a nightly toolchain

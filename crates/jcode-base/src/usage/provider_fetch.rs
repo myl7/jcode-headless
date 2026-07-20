@@ -32,7 +32,7 @@ pub(super) async fn fetch_anthropic_usage_for_token(
                     return ProviderUsage {
                         provider_name: display_name,
                         error: Some(
-                            "OAuth token expired - use `/login claude` to re-authenticate"
+                            "OAuth token expired; replace or re-import the mounted Claude credential"
                                 .to_string(),
                         ),
                         ..Default::default()
@@ -161,7 +161,7 @@ pub(super) async fn fetch_openai_usage_for_account(
                     let report = ProviderUsage {
                         provider_name: display_name,
                         error: Some(format!(
-                            "Token refresh failed: {} - use `/login openai` to re-authenticate",
+                            "Token refresh failed: {}; replace or re-import the mounted OpenAI credential",
                             e
                         )),
                         ..Default::default()

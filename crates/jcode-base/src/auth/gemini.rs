@@ -1,11 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::io::{self, IsTerminal, Write};
 
-const GOOGLE_AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const GOOGLE_USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
-pub const GEMINI_MANUAL_REDIRECT_URI: &str = "https://codeassist.google.com/authcode";
 pub const GEMINI_CLI_AUTH_SOURCE_ID: &str = "gemini_cli_oauth_creds";
 // OAuth credentials from Google's official Gemini CLI (@google/gemini-cli).
 // These are for a "Desktop app" OAuth type where the client secret is safe to embed.
@@ -17,11 +12,6 @@ const GEMINI_CLIENT_SECRET: &str = "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"; // git
 // Env vars can override the hardcoded credentials if needed
 const GEMINI_CLIENT_ID_ENV: &str = "GEMINI_CLIENT_ID";
 const GEMINI_CLIENT_SECRET_ENV: &str = "GEMINI_CLIENT_SECRET";
-const GEMINI_SCOPES: &[&str] = &[
-    "https://www.googleapis.com/auth/cloud-platform",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-];
 
 /// Environment variable names that hold an official Gemini Developer API key
 /// (Google AI Studio). Checked in order; the first non-empty value wins.
@@ -107,21 +97,6 @@ impl GeminiTokens {
         let now_ms = chrono::Utc::now().timestamp_millis();
         self.expires_at <= now_ms + 60_000
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct GoogleTokenResponse {
-    access_token: String,
-    #[serde(default)]
-    refresh_token: Option<String>,
-    expires_in: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct GoogleUserInfo {
-    #[serde(rename = "id")]
-    _id: Option<String>,
-    email: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,7 +227,7 @@ pub fn load_tokens() -> Result<GeminiTokens> {
         });
     }
 
-    anyhow::bail!("No Gemini OAuth tokens found. Run `jcode login --provider gemini`.")
+    anyhow::bail!("No Gemini OAuth tokens found in JCODE_HOME.")
 }
 
 pub fn save_tokens(tokens: &GeminiTokens) -> Result<()> {
@@ -327,261 +302,6 @@ async fn refresh_tokens_uncoordinated(tokens: &GeminiTokens) -> Result<GeminiTok
     }
 
     result
-}
-
-pub async fn login(no_browser: bool) -> Result<GeminiTokens> {
-    let (verifier, challenge) = super::oauth::generate_pkce_public();
-    let state = super::oauth::generate_state_public();
-
-    if !crate::auth::browser_suppressed(no_browser)
-        && let Ok(listener) = super::oauth::bind_callback_listener(0)
-    {
-        let port = listener.local_addr()?.port();
-        let redirect_uri = format!("http://127.0.0.1:{port}/oauth2callback");
-        let auth_url = build_web_auth_url(&redirect_uri, &challenge, &state)?;
-
-        eprintln!("\nOpening browser for Gemini login...\n");
-        eprintln!("If the browser didn't open, visit:\n{}\n", auth_url);
-        if let Some(qr) = crate::login_qr::indented_section(
-            &auth_url,
-            "Scan this QR on another device if this machine has no browser:",
-            "    ",
-        ) {
-            eprintln!("{qr}\n");
-        }
-
-        let browser_opened = open::that(&auth_url).is_ok();
-        if browser_opened {
-            eprintln!(
-                "Waiting up to 300s for automatic callback on {}",
-                redirect_uri
-            );
-            eprintln!(
-                "If the page says sign-in succeeded but jcode does not continue within a few seconds, press Ctrl+C and retry with `--no-browser` to use the manual code flow."
-            );
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(300),
-                super::oauth::wait_for_callback_async_on_listener(listener, &state),
-            )
-            .await
-            {
-                Ok(Ok(code)) => {
-                    let tokens = exchange_authorization_code(&code, Some(&verifier), &redirect_uri)
-                        .await
-                        .context("Gemini token exchange failed")?;
-                    save_tokens(&tokens)?;
-                    return Ok(tokens);
-                }
-                Ok(Err(err)) => {
-                    eprintln!(
-                        "Automatic callback failed ({err}). Falling back to manual auth code entry."
-                    );
-                }
-                Err(_) => {
-                    eprintln!(
-                        "Timed out waiting for callback. Falling back to manual auth code entry."
-                    );
-                }
-            }
-        } else {
-            eprintln!(
-                "Couldn't open a browser on this machine. Falling back to manual auth code entry.\n"
-            );
-        }
-    }
-
-    manual_login(&verifier, &challenge, &state, no_browser).await
-}
-
-async fn manual_login(
-    verifier: &str,
-    challenge: &str,
-    state: &str,
-    no_browser: bool,
-) -> Result<GeminiTokens> {
-    if !io::stdin().is_terminal() {
-        anyhow::bail!(
-            "Gemini login needs an interactive terminal for manual code entry. Re-run in an interactive terminal."
-        );
-    }
-
-    let auth_url = build_manual_auth_url(GEMINI_MANUAL_REDIRECT_URI, challenge, state)?;
-    eprintln!("\nManual Gemini auth required.\n");
-    eprintln!("Open this URL in your browser:\n\n{}\n", auth_url);
-    if let Some(qr) = crate::login_qr::indented_section(
-        &auth_url,
-        "Scan this QR on another device if needed:",
-        "    ",
-    ) {
-        eprintln!("{qr}\n");
-    }
-    if !crate::auth::browser_suppressed(no_browser) {
-        let _ = open::that(&auth_url);
-    }
-    eprintln!("After approving access, Google will show an authorization code. Paste it below.\n");
-    eprint!("Authorization code: ");
-    io::stdout().flush()?;
-    let code = crate::secret_input::read_secret_line()?;
-    if code.trim().is_empty() {
-        anyhow::bail!("No authorization code provided.");
-    }
-
-    let tokens = exchange_authorization_code(&code, Some(verifier), GEMINI_MANUAL_REDIRECT_URI)
-        .await
-        .context("Gemini token exchange failed")?;
-    save_tokens(&tokens)?;
-    Ok(tokens)
-}
-
-pub async fn exchange_callback_input(
-    verifier: &str,
-    input: &str,
-    expected_state: Option<&str>,
-    redirect_uri: &str,
-) -> Result<GeminiTokens> {
-    let code = resolve_callback_or_manual_code(input, expected_state)?;
-
-    let tokens = exchange_authorization_code(&code, Some(verifier), redirect_uri).await?;
-    save_tokens(&tokens)?;
-    Ok(tokens)
-}
-
-fn resolve_callback_or_manual_code(input: &str, expected_state: Option<&str>) -> Result<String> {
-    let trimmed = input.trim();
-    if let Some(expected_state) = expected_state
-        && looks_like_callback_input(trimmed)
-    {
-        let (code, callback_state) = crate::auth::oauth::parse_callback_input_with_state(trimmed)?;
-        if callback_state != expected_state {
-            anyhow::bail!(
-                "OAuth state mismatch. Start Gemini login again and use the latest callback URL."
-            );
-        }
-        return Ok(code);
-    }
-
-    Ok(trimmed.to_string())
-}
-
-fn looks_like_callback_input(input: &str) -> bool {
-    let input = input.trim();
-    input.starts_with("http://")
-        || input.starts_with("https://")
-        || input.starts_with('?')
-        || input.contains("code=")
-        || input.contains("state=")
-}
-
-pub async fn exchange_callback_code(
-    code: &str,
-    verifier: &str,
-    redirect_uri: &str,
-) -> Result<GeminiTokens> {
-    let tokens = exchange_authorization_code(code, Some(verifier), redirect_uri).await?;
-    save_tokens(&tokens)?;
-    Ok(tokens)
-}
-
-async fn exchange_authorization_code(
-    code: &str,
-    verifier: Option<&str>,
-    redirect_uri: &str,
-) -> Result<GeminiTokens> {
-    let client_id = gemini_client_id();
-    let client_secret = gemini_client_secret();
-    let client = crate::provider::shared_http_client();
-    let mut form = vec![
-        ("grant_type", "authorization_code".to_string()),
-        ("client_id", client_id),
-        ("client_secret", client_secret),
-        ("code", code.trim().to_string()),
-        ("redirect_uri", redirect_uri.to_string()),
-    ];
-    if let Some(verifier) = verifier {
-        form.push(("code_verifier", verifier.to_string()));
-    }
-    let resp = client
-        .post(GOOGLE_TOKEN_URL)
-        .form(&form)
-        .send()
-        .await
-        .context("Failed to exchange Gemini authorization code")?;
-
-    if !resp.status().is_success() {
-        let body = crate::util::http_error_body(resp, "HTTP error").await;
-        anyhow::bail!("Gemini token exchange failed: {}", body.trim());
-    }
-
-    let token_resp: GoogleTokenResponse = resp
-        .json()
-        .await
-        .context("Failed to parse Gemini token exchange response")?;
-
-    let refresh_token = token_resp.refresh_token.ok_or_else(|| {
-        anyhow::anyhow!(
-            "No refresh token received. Revoke access at https://myaccount.google.com/permissions and try again."
-        )
-    })?;
-
-    let email = fetch_email(&token_resp.access_token).await.ok();
-    Ok(GeminiTokens {
-        access_token: token_resp.access_token,
-        refresh_token,
-        expires_at: chrono::Utc::now().timestamp_millis() + (token_resp.expires_in * 1000),
-        email,
-    })
-}
-
-pub async fn fetch_email(access_token: &str) -> Result<String> {
-    let client = crate::provider::shared_http_client();
-    let resp = client
-        .get(GOOGLE_USERINFO_URL)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .context("Failed to fetch Gemini Google profile")?;
-
-    if !resp.status().is_success() {
-        let body = crate::util::http_error_body(resp, "HTTP error").await;
-        anyhow::bail!("Failed to fetch Gemini Google profile: {}", body.trim());
-    }
-
-    let profile: GoogleUserInfo = resp
-        .json()
-        .await
-        .context("Failed to parse Gemini Google profile")?;
-    profile
-        .email
-        .filter(|email| !email.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Google profile did not include an email address"))
-}
-
-pub fn build_web_auth_url(redirect_uri: &str, challenge: &str, state: &str) -> Result<String> {
-    let scope = GEMINI_SCOPES.join(" ");
-    let client_id = gemini_client_id();
-    Ok(format!(
-        "{base}?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&code_challenge={challenge}&code_challenge_method=S256&state={state}&access_type=offline&prompt=consent",
-        base = GOOGLE_AUTHORIZE_URL,
-        client_id = urlencoding::encode(&client_id),
-        redirect_uri = urlencoding::encode(redirect_uri),
-        scope = urlencoding::encode(&scope),
-        challenge = urlencoding::encode(challenge),
-        state = urlencoding::encode(state),
-    ))
-}
-
-pub fn build_manual_auth_url(redirect_uri: &str, challenge: &str, state: &str) -> Result<String> {
-    let scope = GEMINI_SCOPES.join(" ");
-    let client_id = gemini_client_id();
-    Ok(format!(
-        "{base}?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&code_challenge={challenge}&code_challenge_method=S256&state={state}&access_type=offline&prompt=consent",
-        base = GOOGLE_AUTHORIZE_URL,
-        client_id = urlencoding::encode(&client_id),
-        redirect_uri = urlencoding::encode(redirect_uri),
-        scope = urlencoding::encode(&scope),
-        challenge = urlencoding::encode(challenge),
-        state = urlencoding::encode(state),
-    ))
 }
 
 fn resolve_gemini_cli_command_with<F>(env_spec: Option<&str>, command_exists: F) -> GeminiCliCommand

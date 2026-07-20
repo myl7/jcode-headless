@@ -117,7 +117,6 @@ mod tests {
     fn integration_surface_support_matches_catalog_order() {
         let surfaces = [
             LoginProviderSurface::CliLogin,
-            LoginProviderSurface::TuiLogin,
             LoginProviderSurface::ServerBootstrap,
             LoginProviderSurface::AutoInit,
             LoginProviderSurface::AuthStatus,

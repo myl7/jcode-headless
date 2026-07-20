@@ -35,13 +35,6 @@ pub fn invalidate_github_token_cache() {
     }
 }
 
-/// VSCode's OAuth client ID for GitHub Copilot device flow.
-/// This is the well-known client ID used by VS Code, OpenCode, and other tools.
-pub const GITHUB_COPILOT_CLIENT_ID: &str = "Iv1.b507a08c87ecfe98";
-
-/// GitHub endpoints for Copilot auth
-pub const GITHUB_DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
-pub const GITHUB_ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 pub const COPILOT_TOKEN_URL: &str = "https://api.github.com/copilot_internal/v2/token";
 
 /// Copilot API base URL
@@ -99,26 +92,6 @@ impl ExternalCopilotAuthSource {
 pub const EDITOR_VERSION: &str = "jcode/1.0";
 pub const EDITOR_PLUGIN_VERSION: &str = "jcode/1.0";
 pub const COPILOT_INTEGRATION_ID: &str = "vscode-chat";
-
-/// Response from GitHub device code endpoint
-#[derive(Debug, Deserialize)]
-pub struct DeviceCodeResponse {
-    pub device_code: String,
-    pub user_code: String,
-    pub verification_uri: String,
-    pub expires_in: u64,
-    pub interval: u64,
-}
-
-/// Response from GitHub access token endpoint
-#[derive(Debug, Deserialize)]
-pub struct AccessTokenResponse {
-    pub access_token: Option<String>,
-    pub token_type: Option<String>,
-    pub scope: Option<String>,
-    pub error: Option<String>,
-    pub error_description: Option<String>,
-}
 
 /// Response from Copilot token exchange endpoint
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -213,7 +186,7 @@ pub fn load_github_token() -> Result<String> {
 
     anyhow::bail!(
         "GitHub Copilot token not found. \
-         Set COPILOT_GITHUB_TOKEN/GH_TOKEN/GITHUB_TOKEN, run `jcode login --provider copilot`, \
+         Set COPILOT_GITHUB_TOKEN/GH_TOKEN/GITHUB_TOKEN, provision the token in JCODE_HOME, \
          or set JCODE_COPILOT_ALLOW_GH_AUTH_TOKEN=1 to explicitly reuse `gh auth token`."
     )
 }
@@ -675,123 +648,6 @@ pub async fn verify_copilot_credentials_live_default() -> Result<()> {
     verify_copilot_credentials_live(&client).await
 }
 
-/// Initiate GitHub OAuth device flow for Copilot authentication.
-/// Returns the device code response with user instructions.
-pub async fn initiate_device_flow(client: &reqwest::Client) -> Result<DeviceCodeResponse> {
-    let resp = client
-        .post(GITHUB_DEVICE_CODE_URL)
-        .header("Accept", "application/json")
-        .form(&[
-            ("client_id", GITHUB_COPILOT_CLIENT_ID),
-            ("scope", "read:user"),
-        ])
-        .send()
-        .await
-        .context("Failed to initiate GitHub device flow")?;
-
-    if !resp.status().is_success() {
-        let body = crate::util::http_error_body(resp, "HTTP error").await;
-        anyhow::bail!("GitHub device flow failed: {}", body);
-    }
-
-    resp.json::<DeviceCodeResponse>()
-        .await
-        .context("Failed to parse device code response")
-}
-
-/// Poll for the access token after user has authorized the device.
-/// Returns the GitHub OAuth token (gho_xxx format).
-pub async fn poll_for_access_token(
-    client: &reqwest::Client,
-    device_code: &str,
-    interval: u64,
-) -> Result<String> {
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
-
-        let resp = client
-            .post(GITHUB_ACCESS_TOKEN_URL)
-            .header("Accept", "application/json")
-            .form(&[
-                ("client_id", GITHUB_COPILOT_CLIENT_ID),
-                ("device_code", device_code),
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ])
-            .send()
-            .await
-            .context("Failed to poll for access token")?;
-
-        let token_resp: AccessTokenResponse = resp
-            .json()
-            .await
-            .context("Failed to parse access token response")?;
-
-        if let Some(token) = token_resp.access_token {
-            return Ok(token);
-        }
-
-        match token_resp.error.as_deref() {
-            Some("authorization_pending") => continue,
-            Some("slow_down") => {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-            Some("expired_token") => {
-                anyhow::bail!("Device code expired. Please try again.");
-            }
-            Some("access_denied") => {
-                anyhow::bail!("Authorization was denied by the user.");
-            }
-            Some(err) => {
-                let desc = token_resp.error_description.unwrap_or_default();
-                anyhow::bail!("GitHub auth error: {} - {}", err, desc);
-            }
-            None => {
-                anyhow::bail!("Unexpected response from GitHub");
-            }
-        }
-    }
-}
-
-/// Save a GitHub OAuth token to the standard Copilot config location.
-pub fn save_github_token(token: &str, username: &str) -> Result<()> {
-    let config_dir = legacy_copilot_config_dir();
-    std::fs::create_dir_all(&config_dir)
-        .with_context(|| format!("Failed to create {}", config_dir.display()))?;
-    crate::platform::set_directory_permissions_owner_only(&config_dir)
-        .with_context(|| format!("Failed to secure {}", config_dir.display()))?;
-
-    let hosts_path = config_dir.join("hosts.json");
-
-    let mut config: HashMap<String, HashMap<String, String>> =
-        if let Ok(data) = std::fs::read_to_string(&hosts_path) {
-            serde_json::from_str(&data).unwrap_or_default()
-        } else {
-            HashMap::new()
-        };
-
-    let mut entry = HashMap::new();
-    entry.insert("user".to_string(), username.to_string());
-    entry.insert("oauth_token".to_string(), token.to_string());
-    config.insert("github.com".to_string(), entry);
-
-    let json = serde_json::to_string_pretty(&config)?;
-    crate::storage::write_text_secret(&hosts_path, &json)
-        .with_context(|| format!("Failed to write {}", hosts_path.display()))?;
-
-    // A token written by jcode's own device-login flow should be immediately
-    // usable in future sessions. Without this, later reads treat the saved
-    // hosts.json as an untrusted external auth source and appear to "lose"
-    // the Copilot login after restart/new session.
-    crate::config::Config::allow_external_auth_source_for_path(
-        COPILOT_HOSTS_AUTH_SOURCE_ID,
-        &hosts_path,
-    )?;
-    super::AuthStatus::invalidate_cache();
-
-    Ok(())
-}
-
 /// Copilot account type - determines API base URL and available models
 #[derive(Debug, Clone, PartialEq)]
 pub enum CopilotAccountType {
@@ -897,29 +753,6 @@ pub fn choose_default_model(available_models: &[CopilotModelInfo]) -> String {
     } else {
         "claude-sonnet-4".to_string()
     }
-}
-
-/// Fetch the authenticated GitHub username using an OAuth token.
-pub async fn fetch_github_username(client: &reqwest::Client, token: &str) -> Result<String> {
-    let resp = client
-        .get("https://api.github.com/user")
-        .header("Authorization", format!("Bearer {}", token))
-        .header("User-Agent", EDITOR_VERSION)
-        .send()
-        .await
-        .context("Failed to fetch GitHub user")?;
-
-    if !resp.status().is_success() {
-        anyhow::bail!("Failed to fetch GitHub user (HTTP {})", resp.status());
-    }
-
-    #[derive(Deserialize)]
-    struct GithubUser {
-        login: String,
-    }
-
-    let user: GithubUser = resp.json().await.context("Failed to parse GitHub user")?;
-    Ok(user.login)
 }
 
 #[cfg(test)]

@@ -368,48 +368,6 @@ fn matrix_login_provider_ids_and_aliases_are_unique() {
 }
 
 #[test]
-fn matrix_tui_login_selection_supports_numbers_and_names() {
-    let providers = tui_login_providers();
-    assert_eq!(
-        resolve_login_selection("1", &providers).map(|provider| provider.id),
-        Some("auto-import")
-    );
-    assert_eq!(
-        resolve_login_selection("2", &providers).map(|provider| provider.id),
-        Some("claude")
-    );
-    // `anthropic-api` sits at 3 (between claude and openai), shifting the
-    // rest of the list down one slot relative to the pre-May-2026 order.
-    assert_eq!(
-        resolve_login_selection("3", &providers).map(|provider| provider.id),
-        Some("anthropic-api")
-    );
-    assert_eq!(
-        resolve_login_selection("7", &providers).map(|provider| provider.id),
-        Some("bedrock")
-    );
-    assert_eq!(
-        resolve_login_selection("compat", &providers).map(|provider| provider.id),
-        Some("openai-compatible")
-    );
-    assert_eq!(
-        resolve_login_selection("cgc", &providers).map(|provider| provider.id),
-        Some("comtegra")
-    );
-    assert_eq!(
-        resolve_login_selection("bedrock", &providers).map(|provider| provider.id),
-        Some("bedrock")
-    );
-    assert!(
-        providers
-            .iter()
-            .take(7)
-            .any(|provider| provider.id == "bedrock")
-    );
-    assert!(resolve_login_selection("google", &providers).is_none());
-}
-
-#[test]
 fn matrix_cli_login_selection_preserves_existing_order() {
     let providers = cli_login_providers();
     assert_eq!(

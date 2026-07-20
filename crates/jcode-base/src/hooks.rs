@@ -4,7 +4,7 @@
 //! points so other programs can observe or gate agent behavior without
 //! forking jcode. They are configured in `[hooks]` in config.toml (or
 //! `JCODE_HOOK_*` env vars) and follow the same command-line conventions as
-//! `[terminal] spawn_hook`: the command is parsed shell-style but executed
+//! hook commands: the command is parsed shell-style but executed
 //! directly (no shell), with `JCODE_HOOK_*` metadata env vars describing the
 //! event.
 //!
@@ -116,6 +116,68 @@ fn expand_home(program: &str) -> PathBuf {
     PathBuf::from(program)
 }
 
+/// Parse a hook command into argv without invoking a shell.
+fn parse_hook_command(raw: &str) -> anyhow::Result<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut token_started = false;
+
+    for ch in raw.chars() {
+        if escaped {
+            current.push(ch);
+            token_started = true;
+            escaped = false;
+            continue;
+        }
+        if let Some(quote_ch) = quote {
+            if ch == quote_ch {
+                quote = None;
+            } else if ch == '\\' && quote_ch == '"' {
+                escaped = true;
+            } else {
+                current.push(ch);
+                token_started = true;
+            }
+            continue;
+        }
+        match ch {
+            '\\' => {
+                escaped = true;
+                token_started = true;
+            }
+            '\'' | '"' => {
+                quote = Some(ch);
+                token_started = true;
+            }
+            ch if ch.is_whitespace() => {
+                if token_started {
+                    parts.push(std::mem::take(&mut current));
+                    token_started = false;
+                }
+            }
+            ch => {
+                current.push(ch);
+                token_started = true;
+            }
+        }
+    }
+
+    anyhow::ensure!(!escaped, "hook command ends with an escape character");
+    anyhow::ensure!(quote.is_none(), "hook command has an unterminated quote");
+    if token_started {
+        parts.push(current);
+    }
+    anyhow::ensure!(!parts.is_empty(), "hook command is empty");
+    Ok(parts)
+}
+
+#[cfg(all(test, unix))]
+fn sh_escape(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\"'\"'"))
+}
+
 fn truncate_bytes(value: &str, limit: usize) -> &str {
     if value.len() <= limit {
         return value;
@@ -172,7 +234,7 @@ fn build_hook_process(
     command_line: &str,
     event: &HookEvent,
 ) -> anyhow::Result<std::process::Command> {
-    let parts = crate::terminal_launch::parse_hook_command(command_line)?;
+    let parts = parse_hook_command(command_line)?;
     let (program, args) = parts
         .split_first()
         .expect("parse_hook_command guarantees at least one part");
@@ -463,7 +525,7 @@ mod tests {
             "record.sh",
             &format!(
                 "#!/bin/sh\ncat > {}\nexit 0\n",
-                crate::terminal_launch::sh_escape(&record.to_string_lossy())
+                sh_escape(&record.to_string_lossy())
             ),
         );
         let _env = gate_test_config(&script.to_string_lossy(), 5000);
@@ -485,7 +547,7 @@ mod tests {
             "observe.sh",
             &format!(
                 "#!/bin/sh\nprintf '%s|%s|%s|%s' \"$JCODE_HOOK_EVENT\" \"$JCODE_HOOK_SESSION_ID\" \"$JCODE_HOOK_STATUS\" \"$JCODE_HOOKS_DISABLED\" > {}\n",
-                crate::terminal_launch::sh_escape(&record.to_string_lossy())
+                sh_escape(&record.to_string_lossy())
             ),
         );
 

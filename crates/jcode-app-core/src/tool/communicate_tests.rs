@@ -1645,7 +1645,7 @@ fn credential_failure_wave_detected_for_recent_auth_failed_workers() {
     assert!(message.contains("paused dispatching"));
     assert!(message.contains("3 worker(s)"));
     assert!(message.contains("401 Unauthorized"));
-    assert!(message.contains("`jcode login --provider claude`"));
+    assert!(message.contains("`jcode auth import claude`"));
 }
 
 #[test]
@@ -1718,22 +1718,22 @@ fn credential_failure_wave_ignores_foreign_members() {
 }
 
 #[test]
-fn credential_login_fix_hint_maps_provider_names() {
+fn credential_fix_hint_maps_provider_names() {
     assert_eq!(
-        super::credential_login_fix_hint(Some("anthropic")),
-        "`jcode login --provider claude`"
+        super::credential_fix_hint(Some("anthropic")),
+        "`jcode auth import claude`"
     );
     assert_eq!(
-        super::credential_login_fix_hint(Some("OpenAI")),
-        "`jcode login --provider openai`"
+        super::credential_fix_hint(Some("OpenAI")),
+        "`jcode auth import openai`"
     );
     assert_eq!(
-        super::credential_login_fix_hint(Some("copilot")),
-        "`jcode login --provider copilot`"
+        super::credential_fix_hint(Some("copilot")),
+        "replace the mounted credential for `copilot`"
     );
     assert_eq!(
-        super::credential_login_fix_hint(None),
-        "`jcode login --provider <provider>`"
+        super::credential_fix_hint(None),
+        "replace the mounted credential for `<provider>`"
     );
 }
 

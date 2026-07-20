@@ -6,12 +6,11 @@
 pub use jcode_config_types::{
     AgentsConfig, AmbientConfig, AuthConfig, AutoJudgeConfig, AutoReviewConfig, CompactionConfig,
     CompactionMode, CrossProviderFailoverMode, DiagramDisplayMode, DiagramPanePosition,
-    DiffDisplayMode, DisplayConfig, FeatureConfig, GatewayConfig, HooksConfig, KeybindingsConfig,
-    LatexRenderingMode, LaunchHotkeyEntry, LaunchHotkeysConfig, MarkdownSpacingMode,
-    NamedProviderAuth, NamedProviderConfig, NamedProviderModelConfig, NamedProviderType,
-    NativeScrollbarConfig, NotificationsConfig, OverscrollStatusMode, PowerConfig, ProviderConfig,
-    ReasoningDisplayMode, SafetyConfig, SessionPickerResumeAction, SponsorsConfig, SwarmSpawnMode,
-    SwarmStripLayout, TerminalConfig, UpdateChannel, WebSearchConfig, WebSearchEngine,
+    DiffDisplayMode, DisplayConfig, FeatureConfig, HooksConfig, LatexRenderingMode,
+    MarkdownSpacingMode, NamedProviderAuth, NamedProviderConfig, NamedProviderModelConfig,
+    NamedProviderType, NativeScrollbarConfig, OverscrollStatusMode, PowerConfig, ProviderConfig,
+    ReasoningDisplayMode, SafetyConfig, SponsorsConfig, SwarmSpawnMode, SwarmStripLayout,
+    UpdateChannel, WebSearchConfig, WebSearchEngine,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -55,14 +54,8 @@ const CONFIG_ENV_KEYS: &[&str] = &[
     "JCODE_COPILOT_PREMIUM",
     "JCODE_CROSS_PROVIDER_FAILOVER",
     "JCODE_DEBUG_SOCKET",
-    "JCODE_DICTATION_COMMAND",
-    "JCODE_DICTATION_KEY",
-    "JCODE_DICTATION_MODE",
-    "JCODE_DICTATION_TIMEOUT_SECS",
     "JCODE_DIFF_LINE_WRAP",
     "JCODE_DIFF_MODE",
-    "JCODE_DIFF_MODE_CYCLE_KEY",
-    "JCODE_DIAGRAM_PANE_TOGGLE_KEY",
     "JCODE_DISABLE_BASE_TOOLS",
     "JCODE_DISABLED_ANIMATIONS",
     "JCODE_DISABLED_TOOLS",
@@ -71,14 +64,8 @@ const CONFIG_ENV_KEYS: &[&str] = &[
     "JCODE_DISCORD_CHANNEL_ID",
     "JCODE_DISCORD_REPLY_ENABLED",
     "JCODE_DISPLAY_CENTERED",
-    "JCODE_EFFORT_DECREASE_KEY",
-    "JCODE_EFFORT_INCREASE_KEY",
     "JCODE_EMAIL_REPLY_ENABLED",
     "JCODE_EMAIL_TO",
-    "JCODE_FOCUS_HOOK",
-    "JCODE_GATEWAY_BIND_ADDR",
-    "JCODE_GATEWAY_ENABLED",
-    "JCODE_GATEWAY_PORT",
     "JCODE_HOME",
     "JCODE_HOOK_PRE_TOOL",
     "JCODE_HOOK_PRE_TOOL_TIMEOUT_MS",
@@ -92,8 +79,6 @@ const CONFIG_ENV_KEYS: &[&str] = &[
     "JCODE_INFO_WIDGET_TOGGLE_KEY",
     "JCODE_JADE_RELAY_API_BASE",
     "JCODE_JADE_RELAY_ENABLED",
-    "JCODE_JADE_RELAY_LAUNCH_ENABLED",
-    "JCODE_JADE_RELAY_LAUNCH_WORKING_DIR",
     "JCODE_JADE_RELAY_REPLY_ENABLED",
     "JCODE_JADE_RELAY_SESSION_ID",
     "JCODE_JADE_RELAY_TOKEN",
@@ -438,12 +423,6 @@ pub fn on_config_reloaded(listener: fn()) {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
-    /// Keybinding configuration
-    pub keybindings: KeybindingsConfig,
-
-    /// External dictation / speech-to-text integration
-    pub dictation: DictationConfig,
-
     /// Display/UI configuration
     pub display: DisplayConfig,
 
@@ -477,9 +456,6 @@ pub struct Config {
     /// Agent-specific model defaults
     pub agents: AgentsConfig,
 
-    /// Terminal window/pane spawning configuration
-    pub terminal: TerminalConfig,
-
     /// Lifecycle hooks (external commands at turn/session/tool boundaries)
     pub hooks: HooksConfig,
 
@@ -488,12 +464,6 @@ pub struct Config {
 
     /// Safety / notification configuration
     pub safety: SafetyConfig,
-
-    /// Desktop notifications for interactive sessions (e.g. turn completion)
-    pub notifications: NotificationsConfig,
-
-    /// WebSocket gateway configuration (for iOS/web clients)
-    pub gateway: GatewayConfig,
 
     /// Compaction configuration
     pub compaction: CompactionConfig,
@@ -509,9 +479,6 @@ pub struct Config {
 
     /// Sponsored discovery configuration
     pub sponsors: SponsorsConfig,
-
-    /// Global "launch a new jcode" hotkeys (macOS). Baked once by auto-import.
-    pub launch_hotkeys: LaunchHotkeysConfig,
 }
 
 /// Agent Client Protocol adapter configuration.
@@ -664,31 +631,6 @@ impl ToolConfig {
 fn normalize_tool_name(name: &str) -> String {
     let trimmed = name.trim().trim_matches('"');
     jcode_tool_types::resolve_tool_name(trimmed).to_string()
-}
-
-/// External dictation / speech-to-text integration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct DictationConfig {
-    /// Shell command to run. Must print the transcript to stdout.
-    pub command: String,
-    /// How to apply the resulting transcript.
-    pub mode: crate::protocol::TranscriptMode,
-    /// Optional in-app hotkey to trigger dictation.
-    pub key: String,
-    /// Maximum time to wait for the command to finish (0 = no timeout).
-    pub timeout_secs: u64,
-}
-
-impl Default for DictationConfig {
-    fn default() -> Self {
-        Self {
-            command: String::new(),
-            mode: crate::protocol::TranscriptMode::Send,
-            key: "off".to_string(),
-            timeout_secs: 90,
-        }
-    }
 }
 
 mod config_file;

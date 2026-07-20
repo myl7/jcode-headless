@@ -258,7 +258,6 @@ pub(super) async fn handle_get_model_catalog(
         autojudge_enabled: None,
         compaction_mode: Default::default(),
         activity: None,
-        side_panel: Default::default(),
     };
     let json = encode_event(&event);
     let encode_ms = encode_started.elapsed().as_millis();
@@ -504,8 +503,6 @@ async fn send_history_from_persisted_session(
         .into_iter()
         .map(rendered_to_history_message)
         .collect();
-    let side_panel = crate::side_panel::snapshot_for_session(session_id).unwrap_or_default();
-
     let (all_sessions, current_client_count) = {
         let sessions_guard = sessions.read().await;
         let mut all: Vec<String> = sessions_guard.keys().cloned().collect();
@@ -547,7 +544,6 @@ async fn send_history_from_persisted_session(
         service_tier: None,
         compaction_mode: crate::config::config().compaction.mode.clone(),
         activity,
-        side_panel,
     };
 
     write_event(writer, &history_event).await
@@ -681,10 +677,6 @@ pub(super) async fn send_history(
         )
     };
 
-    let side_panel_start = Instant::now();
-    let side_panel = crate::side_panel::snapshot_for_session(session_id).unwrap_or_default();
-    let side_panel_ms = side_panel_start.elapsed().as_millis();
-
     let mut mcp_map: BTreeMap<String, usize> = BTreeMap::new();
     for name in &tool_names {
         if let Some(rest) = name.strip_prefix("mcp__")
@@ -705,7 +697,7 @@ pub(super) async fn send_history(
         let count = *client_count.read().await;
         let sessions_snapshot_ms = sessions_snapshot_start.elapsed().as_millis();
         crate::logging::info(&format!(
-            "[TIMING] send_history prep: session={}, mode={:?}, messages={}, images={}, mcp_servers={}, agent_lock={}ms, history={}ms, images={}ms, tool_names={}ms, models={}ms, routes={}ms, skills={}ms, provider_meta={}ms, compaction={}ms, side_panel={}ms, sessions={}ms, total={}ms",
+            "[TIMING] send_history prep: session={}, mode={:?}, messages={}, images={}, mcp_servers={}, agent_lock={}ms, history={}ms, images={}ms, tool_names={}ms, models={}ms, routes={}ms, skills={}ms, provider_meta={}ms, compaction={}ms, sessions={}ms, total={}ms",
             session_id,
             payload_mode,
             messages.len(),
@@ -720,7 +712,6 @@ pub(super) async fn send_history(
             skills_ms,
             provider_meta_ms,
             compaction_mode_ms,
-            side_panel_ms,
             sessions_snapshot_ms,
             history_start.elapsed().as_millis(),
         ));
@@ -760,7 +751,6 @@ pub(super) async fn send_history(
         service_tier,
         compaction_mode,
         activity,
-        side_panel,
     };
     let encode_start = Instant::now();
     let json = encode_event(&history_event);

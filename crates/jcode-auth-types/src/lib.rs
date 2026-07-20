@@ -84,7 +84,7 @@ pub enum AuthRefreshSupport {
     Unknown,
     Automatic,
     Conditional,
-    ManualRelogin,
+    ManualReplacement,
     ExternalManaged,
     NotApplicable,
 }
@@ -95,7 +95,7 @@ impl AuthRefreshSupport {
             Self::Unknown => "unknown",
             Self::Automatic => "automatic",
             Self::Conditional => "conditional",
-            Self::ManualRelogin => "manual re-login",
+            Self::ManualReplacement => "replace provisioned credential",
             Self::ExternalManaged => "external/manual",
             Self::NotApplicable => "not applicable",
         }

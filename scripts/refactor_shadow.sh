@@ -32,7 +32,6 @@ Usage:
   scripts/refactor_shadow.sh build [--release]
   scripts/refactor_shadow.sh serve [-- <jcode serve args>]
   scripts/refactor_shadow.sh run [-- <jcode args>]
-  scripts/refactor_shadow.sh connect [-- <jcode connect args>]
   scripts/refactor_shadow.sh check
 
 What it does:
@@ -175,16 +174,6 @@ cmd_run() {
   run_isolated "$ref_bin" "${args[@]}"
 }
 
-cmd_connect() {
-  assert_safe_paths
-  ensure_ref_home
-  ensure_socket_parent
-  ensure_binary
-
-  local -a args=("$@")
-  run_isolated "$ref_bin" connect "${args[@]}"
-}
-
 main() {
   local cmd="${1:-help}"
   shift || true
@@ -207,12 +196,6 @@ main() {
         shift
       fi
       cmd_run "$@"
-      ;;
-    connect)
-      if [[ "${1:-}" == "--" ]]; then
-        shift
-      fi
-      cmd_connect "$@"
       ;;
     check)
       cmd_check

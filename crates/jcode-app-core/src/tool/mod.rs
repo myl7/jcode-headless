@@ -4,10 +4,7 @@ mod apply_patch;
 mod bash;
 mod batch;
 mod bg;
-mod browser;
 mod communicate;
-#[cfg(target_os = "macos")]
-mod computer;
 mod conversation_search;
 mod debug_socket;
 mod discover;
@@ -19,14 +16,12 @@ mod ls;
 pub mod mcp;
 mod memory;
 mod multiedit;
-mod open;
 mod patch;
 mod read;
 pub mod selfdev;
 pub(crate) mod serde_coerce;
 mod session_search;
 pub(crate) mod session_search_index;
-mod side_panel;
 mod skill;
 mod todo;
 mod webfetch;
@@ -164,12 +159,6 @@ impl Registry {
                 "agentgrep",
                 agentgrep::AgentGrepTool::new,
             );
-            Self::insert_tool_timed(
-                &mut m,
-                &mut timings,
-                "side_panel",
-                side_panel::SidePanelTool::new,
-            );
             Self::insert_tool_timed(&mut m, &mut timings, "edit", edit::EditTool::new);
             Self::insert_tool_timed(
                 &mut m,
@@ -186,15 +175,6 @@ impl Registry {
             );
             Self::insert_tool_timed(&mut m, &mut timings, "ls", ls::LsTool::new);
             Self::insert_tool_timed(&mut m, &mut timings, "bash", bash::BashTool::new);
-            Self::insert_tool_timed(&mut m, &mut timings, "browser", browser::BrowserTool::new);
-            Self::insert_tool_timed(&mut m, &mut timings, "open", open::OpenTool::new);
-            #[cfg(target_os = "macos")]
-            Self::insert_tool_timed(
-                &mut m,
-                &mut timings,
-                "macos_computer_use",
-                computer::ComputerTool::new,
-            );
             Self::insert_tool_timed(
                 &mut m,
                 &mut timings,

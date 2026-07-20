@@ -877,17 +877,8 @@ impl AmbientRunnerHandle {
     /// Run a single ambient cycle. Returns the cycle result.
     async fn run_cycle(&self, provider: &Arc<dyn Provider>) -> anyhow::Result<AmbientCycleResult> {
         let started_at = Utc::now();
-        let visible = config().ambient.visible;
-
         self.set_running_detail("gathering context").await;
         let (system_prompt, initial_message) = self.build_cycle_context(provider).await?;
-
-        // Visible mode: spawn a full TUI instead of running headlessly
-        if visible {
-            return self
-                .run_cycle_visible(started_at, system_prompt, initial_message)
-                .await;
-        }
 
         // Headless mode: run agent directly
         self.set_running_detail("setting up tools").await;
@@ -972,98 +963,6 @@ impl AmbientRunnerHandle {
         };
         agent.mark_closed();
         Ok(forced)
-    }
-
-    /// Run a visible ambient cycle by spawning a full TUI in a kitty window.
-    async fn run_cycle_visible(
-        &self,
-        started_at: chrono::DateTime<Utc>,
-        system_prompt: String,
-        initial_message: String,
-    ) -> anyhow::Result<AmbientCycleResult> {
-        use crate::ambient::VisibleCycleContext;
-
-        self.set_running_detail("launching visible TUI").await;
-
-        // Save context for the spawned process
-        let context = VisibleCycleContext {
-            system_prompt,
-            initial_message,
-        };
-        context.save()?;
-
-        // Clear any previous result file
-        if let Ok(result_path) = VisibleCycleContext::result_path() {
-            let _ = std::fs::remove_file(&result_path);
-        }
-
-        // Find the jcode binary
-        let jcode_bin =
-            std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("jcode"));
-
-        // Spawn kitty with `jcode ambient run-visible`
-        logging::info("Ambient visible: spawning kitty with jcode TUI");
-        let child = std::process::Command::new("kitty")
-            .args([
-                "--title",
-                "🤖 jcode ambient cycle",
-                "-e",
-                &jcode_bin.to_string_lossy(),
-                "ambient",
-                "run-visible",
-            ])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-
-        match child {
-            Ok(mut child) => {
-                self.set_running_detail("waiting for TUI cycle").await;
-
-                // Wait for the kitty process to exit (user closes window or cycle completes)
-                let status = tokio::task::spawn_blocking(move || child.wait()).await?;
-                match status {
-                    Ok(s) => logging::info(&format!("Ambient visible: TUI exited with {}", s)),
-                    Err(e) => logging::warn(&format!("Ambient visible: wait error: {}", e)),
-                }
-
-                // Try to read the cycle result from the file
-                if let Ok(result_path) = VisibleCycleContext::result_path()
-                    && result_path.exists()
-                    && let Ok(result) =
-                        crate::storage::read_json::<AmbientCycleResult>(&result_path)
-                {
-                    let _ = std::fs::remove_file(&result_path);
-                    return Ok(AmbientCycleResult {
-                        started_at,
-                        ended_at: Utc::now(),
-                        ..result
-                    });
-                }
-
-                // No result file — user closed the window without end_ambient_cycle
-                Ok(AmbientCycleResult {
-                    summary: "Visible cycle ended (user closed window)".to_string(),
-                    memories_modified: 0,
-                    compactions: 0,
-                    proactive_work: None,
-                    next_schedule: None,
-                    started_at,
-                    ended_at: Utc::now(),
-                    status: CycleStatus::Incomplete,
-                    conversation: None,
-                })
-            }
-            Err(e) => {
-                logging::warn(&format!(
-                    "Ambient visible: failed to spawn kitty ({}), falling back to headless",
-                    e
-                ));
-                // Fall back to headless mode
-                Err(anyhow::anyhow!("Failed to spawn visible TUI: {}", e))
-            }
-        }
     }
 }
 

@@ -103,27 +103,6 @@ fn spawn_single_response_http_server_on_host(host: &str, status: u16, body: &str
 }
 
 #[test]
-fn test_parse_tailscale_dns_name_trims_trailing_dot() {
-    let payload = br#"{"Self":{"DNSName":"yashmacbook.tailabc.ts.net."}}"#;
-    let parsed = parse_tailscale_dns_name(payload);
-    assert_eq!(parsed.as_deref(), Some("yashmacbook.tailabc.ts.net"));
-}
-
-#[test]
-fn test_parse_tailscale_dns_name_handles_missing_or_empty() {
-    let missing = br#"{"Self":{}}"#;
-    assert!(parse_tailscale_dns_name(missing).is_none());
-
-    let empty = br#"{"Self":{"DNSName":"   "}}"#;
-    assert!(parse_tailscale_dns_name(empty).is_none());
-}
-
-#[test]
-fn test_parse_tailscale_dns_name_invalid_json() {
-    assert!(parse_tailscale_dns_name(b"not-json").is_none());
-}
-
-#[test]
 fn configured_auth_test_targets_only_include_configured_supported_providers() {
     let _guard = crate::storage::lock_test_env();
 
@@ -147,11 +126,6 @@ fn configured_auth_test_targets_only_include_configured_supported_providers() {
     assert!(targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Claude)));
     assert!(targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Copilot)));
     assert!(targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Gemini)));
-    assert!(targets.contains(&ResolvedAuthTestTarget::Generic {
-        provider: crate::provider_catalog::OPENROUTER_LOGIN_PROVIDER,
-        choice: super::super::provider_init::ProviderChoice::Openrouter,
-    }));
-
     assert!(!targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Openai)));
     assert!(!targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Google)));
     assert!(!targets.contains(&ResolvedAuthTestTarget::Detailed(AuthTestTarget::Cursor)));
@@ -379,7 +353,6 @@ fn cli_provider_choice_filter_uses_typed_api_methods() {
         test_route("claude-opus-4-6", "Anthropic", "claude-api"),
         test_route("gpt-5.5", "OpenAI", "openai-oauth"),
         test_route("gpt-5.5", "OpenAI", "openai-api-key"),
-        test_route("gpt-5.6-pro[web]", "OpenAI", "chatgpt-web"),
         test_route("deepseek/deepseek-v4-pro", "auto", "openrouter"),
         test_route("grok-code-fast-1", "Copilot", "copilot"),
     ];
@@ -388,17 +361,11 @@ fn cli_provider_choice_filter_uses_typed_api_methods() {
         &super::super::provider_init::ProviderChoice::Openai,
         &routes,
     );
-    assert_eq!(openai.len(), 2);
+    assert_eq!(openai.len(), 1);
     assert!(openai.iter().any(|route| matches!(
         route.api_method_kind(),
         crate::provider::ModelRouteApiMethod::OpenAIOAuth
     )));
-    assert!(openai.iter().any(|route| {
-        matches!(
-            route.api_method_kind(),
-            crate::provider::ModelRouteApiMethod::Other(ref value) if value == "chatgpt-web"
-        )
-    }));
 
     let claude = filter_cli_model_routes_for_choice(
         &super::super::provider_init::ProviderChoice::Claude,
@@ -436,36 +403,6 @@ fn cloud_sessions_args_match_jade_helper_contract() {
             "--sessions-dir",
             "/tmp/sessions",
             "--raw",
-        ]
-    );
-
-    let args = build_jade_sessions_args(CloudSessionsSubcommand::View {
-        session_id: "session_123".to_string(),
-        format: "html".to_string(),
-        output: Some("/tmp/session.html".to_string()),
-        open: true,
-        user_id: "dev".to_string(),
-        profile: Some("profile".to_string()),
-        region: Some("region".to_string()),
-        helper: None,
-    });
-
-    assert_eq!(
-        args,
-        vec![
-            "view",
-            "--user-id",
-            "dev",
-            "--profile",
-            "profile",
-            "--region",
-            "region",
-            "--format",
-            "html",
-            "--output",
-            "/tmp/session.html",
-            "--open",
-            "session_123",
         ]
     );
 }
@@ -652,123 +589,6 @@ fn cloud_sessions_sync_respects_min_interval_throttle() {
     // The session should NOT be recorded as uploaded.
     let reloaded = load_cloud_sessions_sync_state().expect("reload state");
     assert!(!reloaded.sessions.contains_key("session_gamma"));
-}
-
-#[test]
-fn render_cloud_sessions_dashboard_html_escapes_and_lists_rows() {
-    let items: Vec<CloudSessionListItem> = serde_json::from_str(
-        r#"[
-          {"session_id":"session_x","title":"Hello <b> & \"world\"","message_count":12,"uploaded_at":"2026-05-29T00:00:00Z"},
-          {"session_id":"session_y","short_name":"shorty","message_count":"3","uploaded_at":"2026-05-28T00:00:00Z"}
-        ]"#,
-    )
-    .expect("parse items");
-
-    let html =
-        render_cloud_sessions_dashboard_html("alice", &items, &std::collections::BTreeMap::new());
-    assert!(html.contains("Jade Cloud Sessions"));
-    assert!(html.contains("user: alice"));
-    assert!(html.contains("2 session(s)"));
-    assert!(html.contains("session_x"));
-    assert!(html.contains("shorty"));
-    // Raw title must be escaped (no live markup, quotes escaped).
-    assert!(!html.contains("Hello <b>"));
-    assert!(html.contains("Hello &lt;b&gt; &amp; &quot;world&quot;"));
-    // Numeric and string message counts both render.
-    assert!(html.contains(">12<"));
-    assert!(html.contains(">3<"));
-}
-
-#[test]
-fn render_cloud_sessions_dashboard_html_handles_empty() {
-    let html = render_cloud_sessions_dashboard_html("dev", &[], &std::collections::BTreeMap::new());
-    assert!(html.contains("0 session(s)"));
-    assert!(html.contains("No uploaded sessions found."));
-}
-
-#[test]
-fn render_cloud_sessions_dashboard_html_links_rows_with_view_files() {
-    let items: Vec<CloudSessionListItem> = serde_json::from_str(
-        r#"[
-          {"session_id":"session_x","title":"X","message_count":1,"uploaded_at":"2026-05-29T00:00:00Z"},
-          {"session_id":"session_y","title":"Y","message_count":2,"uploaded_at":"2026-05-28T00:00:00Z"}
-        ]"#,
-    )
-    .expect("parse items");
-    let mut links = std::collections::BTreeMap::new();
-    links.insert(
-        "session_x".to_string(),
-        "dash-views/session_x.html".to_string(),
-    );
-
-    let html = render_cloud_sessions_dashboard_html("alice", &items, &links);
-    // Linked session gets an anchor to its relative viewer file.
-    assert!(html.contains("<a href='dash-views/session_x.html'>session_x</a>"));
-    // Session without a generated viewer stays plain text (no anchor).
-    assert!(html.contains("<td class='id'>session_y</td>"));
-}
-
-#[test]
-fn sanitize_filename_keeps_safe_chars_and_replaces_others() {
-    assert_eq!(
-        sanitize_filename("session_abc-123.json"),
-        "session_abc-123.json"
-    );
-    assert_eq!(sanitize_filename("a/b c:d"), "a_b_c_d");
-}
-
-#[test]
-fn dashboard_views_dir_is_sibling_of_dashboard() {
-    let dir = dashboard_views_dir(std::path::Path::new("/tmp/out/dash.html"));
-    assert_eq!(dir, std::path::PathBuf::from("/tmp/out/dash-views"));
-}
-
-#[test]
-fn relative_link_is_relative_to_dashboard_parent() {
-    let link = relative_link(
-        std::path::Path::new("/tmp/out/dash.html"),
-        std::path::Path::new("/tmp/out/dash-views/session_x.html"),
-    );
-    assert_eq!(link.as_deref(), Some("dash-views/session_x.html"));
-}
-
-#[test]
-fn parse_cloud_session_list_json_accepts_array_and_object_wrappers() {
-    // Real helper shape: a top-level array.
-    let array = parse_cloud_session_list_json(
-        r#"[{"session_id":"session_a","message_count":2,"uploaded_at":"2026-05-29T00:00:00Z"}]"#,
-    )
-    .expect("parse array");
-    assert_eq!(array.len(), 1);
-    assert_eq!(array[0].session_id.as_deref(), Some("session_a"));
-
-    // Tolerated object wrappers.
-    let items = parse_cloud_session_list_json(r#"{"items":[{"session_id":"session_b"}]}"#)
-        .expect("parse items wrapper");
-    assert_eq!(items[0].session_id.as_deref(), Some("session_b"));
-
-    let sessions = parse_cloud_session_list_json(r#"{"sessions":[{"session_id":"session_c"}]}"#)
-        .expect("parse sessions wrapper");
-    assert_eq!(sessions[0].session_id.as_deref(), Some("session_c"));
-
-    // Empty array stays empty.
-    assert!(
-        parse_cloud_session_list_json("[]")
-            .expect("parse empty")
-            .is_empty()
-    );
-}
-
-#[test]
-fn parse_cloud_session_list_json_rejects_unexpected_shapes() {
-    // A bare object without a recognized array key is an error.
-    let err = parse_cloud_session_list_json(r#"{"unexpected":true}"#)
-        .expect_err("object without items/sessions");
-    assert!(err.to_string().contains("items"));
-
-    // A scalar is also rejected with a descriptive message.
-    let err = parse_cloud_session_list_json("42").expect_err("scalar");
-    assert!(err.to_string().contains("a number"));
 }
 
 #[test]

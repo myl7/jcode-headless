@@ -253,8 +253,7 @@ impl SelfDevTool {
         Ok(ToolOutput::new(
             r#"## Debug Socket Commands
 
-Commands are namespaced with `server:`, `client:`, or `tester:` prefixes.
-Unnamespaced commands default to `server:`.
+Commands use the `server:` namespace. Unnamespaced commands default to it.
 
 ### Server Commands (agent/tools)
 | Command | Description |
@@ -268,31 +267,6 @@ Unnamespaced commands default to `server:`.
 | `sessions` | List all sessions |
 | `create_session` | Create headless session |
 | `help` | Full help text |
-
-### Client Commands (TUI/visual debug)
-| Command | Description |
-|---------|-------------|
-| `client:frame` | Get latest visual debug frame (JSON) |
-| `client:frame-normalized` | Normalized frame for diffs |
-| `client:screen` | Dump frames to file |
-| `client:enable` | Enable visual debug capture |
-| `client:disable` | Disable visual debug capture |
-| `client:status` | Client debug status |
-| `client:scroll-test[:<json>]` | Run offscreen scroll+diagram test |
-| `client:scroll-suite[:<json>]` | Run scroll+diagram test suite |
-
-### Tester Commands (spawn test instances)
-| Command | Description |
-|---------|-------------|
-| `tester:spawn` | Spawn new tester instance |
-| `tester:spawn {"cwd":"/path"}` | Spawn with options |
-| `tester:list` | List active testers |
-| `tester:<id>:frame` | Get frame from tester |
-| `tester:<id>:state` | Get tester state |
-| `tester:<id>:message:<text>` | Send message to tester |
-| `tester:<id>:scroll-test[:<json>]` | Run offscreen scroll+diagram test |
-| `tester:<id>:scroll-suite[:<json>]` | Run scroll+diagram test suite |
-| `tester:<id>:stop` | Stop tester |
 
 Use the `debug_socket` tool to execute these commands directly."#
                 .to_string(),

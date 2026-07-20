@@ -112,7 +112,7 @@ impl AntigravityProvider {
     /// provider-doctor's native Antigravity driver.
     ///
     /// Antigravity authenticates exclusively via the Google OAuth tokens minted
-    /// by `jcode login --provider antigravity`; there is no API-key path. This
+    /// by the pre-authenticated credential provisioning flow; there is no API-key path. This
     /// loads (and refreshes if needed) those tokens through the exact same code
     /// path inference uses, returning only the resolved Google account email so
     /// the doctor can confirm the credential without ever surfacing the token

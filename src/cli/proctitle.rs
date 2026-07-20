@@ -64,30 +64,10 @@ mod tests {
     }
 
     #[test]
-    fn initial_title_labels_resume_client_with_short_name() {
+    fn initial_title_labels_run() {
         with_selfdev_env_removed(|| {
-            let args = Args::parse_from(["jcode", "--resume", "session_fox_123"]);
-            assert_eq!(initial_title(&args), "jcode:c:fox");
+            let args = Args::parse_from(["jcode", "run", "status"]);
+            assert_eq!(initial_title(&args), "jcode run");
         });
-    }
-
-    #[test]
-    fn initial_title_labels_selfdev_command() {
-        with_selfdev_env_removed(|| {
-            let args = Args::parse_from(["jcode", "self-dev"]);
-            assert_eq!(initial_title(&args), "jcode:selfdev");
-        });
-    }
-
-    #[test]
-    fn initial_title_labels_windows_hotkey_listener() {
-        let args = Args::parse_from(["jcode", "setup-hotkey", "--listen-windows-hotkey"]);
-        assert_eq!(initial_title(&args), "jcode hotkey listener");
-    }
-
-    #[test]
-    fn initial_title_labels_hotkey_uninstall() {
-        let args = Args::parse_from(["jcode", "setup-hotkey", "--uninstall"]);
-        assert_eq!(initial_title(&args), "jcode hotkey uninstall");
     }
 }

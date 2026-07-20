@@ -27,7 +27,6 @@ async-trait = "0.1"
 
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "blocking", "charset", "http2", "system-proxy", "rustls-tls", "rustls-tls-native-roots"] }
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -49,7 +48,6 @@ proctitle = "0.1"
 
 # Embeddings (local inference) - behind feature flag (163 crates, slow to compile)
 jcode-embedding = { path = "../jcode-embedding", optional = true }
-jcode-gateway-types = { path = "../jcode-gateway-types" }
 jcode-import-core = { path = "../jcode-import-core" }
 jcode-logging = { path = "../jcode-logging" }
 
@@ -59,7 +57,6 @@ sha2 = "0.10"
 rand = "0.9.3"
 hex = "0.4"
 url = "2"
-open = "5"               # Open URLs in browser
 jcode-auth-types = { path = "../jcode-auth-types" }
 jcode-azure-auth = { path = "../jcode-azure-auth" }
 jcode-agent-runtime = { path = "../jcode-agent-runtime" }
@@ -80,17 +77,11 @@ jcode-provider-gemini = { path = "../jcode-provider-gemini" }
 # `jcode-render-core` respectively, so the layering inversion (foundation
 # depending on presentation) is gone.
 jcode-render-core = { path = "../jcode-render-core" }
-jcode-terminal-launch = { path = "../jcode-terminal-launch" }
-jcode-terminal-image = { path = "../jcode-terminal-image" }
 jcode-telemetry-core = { path = "../jcode-telemetry-core" }
 jcode-usage-types = { path = "../jcode-usage-types" }
 
 # Streaming
 
-# Terminal I/O (event stream for interactive auth/secret prompts). NOTE: the
-# heavier presentation deps (ratatui widgets, arboard clipboard) were dropped
-# from this foundation layer; they are unused here and live only in `jcode-tui`.
-crossterm = { version = "0.29", features = ["event-stream"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }  # Only PNG/JPEG (skip avif/rav1e, exr, gif, tiff, etc)
 
 # NOTE: PDF text extraction (jcode-pdf) lives in the upper jcode-app-core crate
@@ -110,11 +101,9 @@ jcode-storage = { path = "../jcode-storage" }
 jcode-task-types = { path = "../jcode-task-types" }
 jcode-tool-core = { path = "../jcode-tool-core" }
 jcode-tool-types = { path = "../jcode-tool-types" }
-jcode-side-panel-types = { path = "../jcode-side-panel-types" }
 
 # Gzip decoding (used by provider import/helpers)
 tempfile = "3"
-qrcode = { version = "0.14.1", default-features = false }
 
 [features]
 default = ["embeddings", "bedrock"]
@@ -143,7 +132,6 @@ bedrock = ["jcode-provider-bedrock/aws-sdk"]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Power", "Win32_System_Threading"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-global-hotkey = "0.7"
 
 [dev-dependencies]
 # Dev-only cycle (cargo permits dev-dependencies on dependents): base's

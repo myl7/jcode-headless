@@ -1,48 +1,4 @@
 #[test]
-fn test_transcript_request_roundtrip() -> Result<()> {
-    let req = Request::Transcript {
-        id: 77,
-        text: "hello from whisper".to_string(),
-        mode: TranscriptMode::Send,
-        session_id: Some("sess_abc".to_string()),
-    };
-    let json = serde_json::to_string(&req)?;
-    assert!(json.contains("\"type\":\"transcript\""));
-    let decoded = parse_request_json(&json)?;
-    assert_eq!(decoded.id(), 77);
-    let Request::Transcript {
-        text,
-        mode,
-        session_id,
-        ..
-    } = decoded
-    else {
-        return Err(anyhow!("expected Transcript request"));
-    };
-    assert_eq!(text, "hello from whisper");
-    assert_eq!(mode, TranscriptMode::Send);
-    assert_eq!(session_id.as_deref(), Some("sess_abc"));
-    Ok(())
-}
-
-#[test]
-fn test_transcript_event_roundtrip() -> Result<()> {
-    let event = ServerEvent::Transcript {
-        text: "dictated text".to_string(),
-        mode: TranscriptMode::Replace,
-    };
-    let json = encode_event(&event);
-    assert!(json.contains("\"type\":\"transcript\""));
-    let decoded = parse_event_json(json.trim())?;
-    let ServerEvent::Transcript { text, mode } = decoded else {
-        return Err(anyhow!("expected Transcript event"));
-    };
-    assert_eq!(text, "dictated text");
-    assert_eq!(mode, TranscriptMode::Replace);
-    Ok(())
-}
-
-#[test]
 fn test_memory_activity_event_roundtrip() -> Result<()> {
     let event = ServerEvent::MemoryActivity {
         activity: MemoryActivitySnapshot {
@@ -130,19 +86,6 @@ fn test_input_shell_result_event_roundtrip() -> Result<()> {
 
 #[test]
 fn test_protocol_enum_roundtrips_cover_wire_names() -> Result<()> {
-    let transcript_modes = [
-        (TranscriptMode::Insert, "insert"),
-        (TranscriptMode::Append, "append"),
-        (TranscriptMode::Replace, "replace"),
-        (TranscriptMode::Send, "send"),
-    ];
-    for (mode, wire) in transcript_modes {
-        let json = serde_json::to_string(&mode)?;
-        assert_eq!(json, format!("\"{}\"", wire));
-        let decoded: TranscriptMode = serde_json::from_str(&json)?;
-        assert_eq!(decoded, mode);
-    }
-
     let delivery_modes = [
         (CommDeliveryMode::Notify, "notify"),
         (CommDeliveryMode::Interrupt, "interrupt"),

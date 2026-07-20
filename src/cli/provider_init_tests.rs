@@ -2,9 +2,6 @@ use super::*;
 // These moved from cli::provider_init to crate::external_auth in the
 // tui->cli layering refactor (a9a82827); provider_init.rs only re-imports the
 // subset it uses, so `super::*` no longer re-exports them to this test module.
-use crate::external_auth::{
-    parse_external_auth_review_selection, pending_external_auth_review_candidates,
-};
 use crate::provider_catalog::{self, resolve_login_selection, resolve_openai_compatible_profile};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
@@ -321,78 +318,6 @@ fn test_openai_compatible_profile_rejects_invalid_overrides() {
             crate::env::remove_var(&key);
         }
     }
-}
-
-#[test]
-fn parse_external_auth_review_selection_supports_all_and_deduped_indices() {
-    assert_eq!(
-        parse_external_auth_review_selection("", 3).unwrap(),
-        Vec::<usize>::new()
-    );
-    assert_eq!(
-        parse_external_auth_review_selection("a", 3).unwrap(),
-        vec![0, 1, 2]
-    );
-    assert_eq!(
-        parse_external_auth_review_selection("2,1,2", 3).unwrap(),
-        vec![1, 0]
-    );
-    assert!(parse_external_auth_review_selection("4", 3).is_err());
-    assert!(parse_external_auth_review_selection("nope", 3).is_err());
-}
-
-#[test]
-fn parse_login_provider_selection_supports_skip_and_names() {
-    let providers = provider_catalog::cli_login_providers();
-
-    assert!(
-        parse_login_provider_selection_input("", &providers)
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        parse_login_provider_selection_input("skip", &providers)
-            .unwrap()
-            .is_none()
-    );
-    assert_eq!(
-        parse_login_provider_selection_input("claude", &providers)
-            .unwrap()
-            .map(|provider| provider.id),
-        Some("claude")
-    );
-    let first_provider = providers[0].id;
-    assert_eq!(
-        parse_login_provider_selection_input("1", &providers)
-            .unwrap()
-            .map(|provider| provider.id),
-        Some(first_provider)
-    );
-    assert!(parse_login_provider_selection_input("not-a-provider", &providers).is_err());
-}
-
-#[test]
-fn login_provider_menu_shows_autodetected_auth_and_skip() {
-    let providers = vec![
-        provider_catalog::CLAUDE_LOGIN_PROVIDER,
-        provider_catalog::OPENAI_LOGIN_PROVIDER,
-    ];
-    let status = auth::AuthStatus {
-        anthropic: auth::ProviderAuth {
-            state: auth::AuthState::Available,
-            has_oauth: true,
-            oauth_state: auth::AuthState::Available,
-            has_api_key: false,
-        },
-        ..Default::default()
-    };
-
-    let menu = render_login_provider_selection_menu("Choose a provider:", &providers, &status);
-    assert!(menu.contains("Autodetected auth:"));
-    assert!(menu.contains("Anthropic/Claude: configured: OAuth"));
-    assert!(menu.contains("[configured"));
-    assert!(menu.contains("[not configured"));
-    assert!(menu.contains("Skip: press Enter"));
 }
 
 #[test]
@@ -889,64 +814,5 @@ async fn auto_provider_noninteractive_skips_untrusted_external_auth_instead_of_b
         } else {
             crate::env::remove_var(&key);
         }
-    }
-}
-
-#[test]
-fn pending_external_auth_review_candidates_include_shared_and_legacy_sources() {
-    let _guard = lock_env();
-    let _env_guard = crate::storage::lock_test_env();
-    let dir = TempDir::new().expect("temp dir");
-    let prev_home = std::env::var_os("JCODE_HOME");
-    crate::env::set_var("JCODE_HOME", dir.path());
-
-    let opencode_path = crate::auth::external::ExternalAuthSource::OpenCode
-        .path()
-        .expect("opencode path");
-    std::fs::create_dir_all(opencode_path.parent().expect("opencode parent"))
-        .expect("create opencode dir");
-    std::fs::write(
-        &opencode_path,
-        serde_json::json!({
-            "openai": {
-                "type": "oauth",
-                "access": "sk-openai",
-                "refresh": "refresh",
-                "expires": chrono::Utc::now().timestamp_millis() + 60_000
-            }
-        })
-        .to_string(),
-    )
-    .expect("write opencode auth");
-
-    let codex_path = crate::auth::codex::legacy_auth_file_path().expect("codex path");
-    std::fs::create_dir_all(codex_path.parent().expect("codex parent")).expect("create codex dir");
-    std::fs::write(
-        &codex_path,
-        serde_json::json!({
-            "tokens": {
-                "access_token": "sk-codex",
-                "refresh_token": "refresh",
-                "expires_at": chrono::Utc::now().timestamp_millis() + 60_000
-            }
-        })
-        .to_string(),
-    )
-    .expect("write codex auth");
-
-    let candidates = pending_external_auth_review_candidates().expect("candidates");
-    assert!(candidates.iter().any(|candidate| {
-        candidate.source_name() == "OpenCode auth.json"
-            && candidate.provider_summary().contains("OpenAI/Codex")
-    }));
-    assert!(candidates.iter().any(|candidate| {
-        candidate.source_name() == "Codex auth.json"
-            && candidate.provider_summary() == "OpenAI/Codex"
-    }));
-
-    if let Some(prev_home) = prev_home {
-        crate::env::set_var("JCODE_HOME", prev_home);
-    } else {
-        crate::env::remove_var("JCODE_HOME");
     }
 }

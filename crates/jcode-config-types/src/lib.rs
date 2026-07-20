@@ -1,12 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub mod keybindings;
-pub use keybindings::{
-    KEYBINDING_DEFAULTS, KeybindingDefault, KeybindingIssue, KeybindingIssueKind,
-    KeybindingPlatform, KeybindingProvenance, PlatformDefault, default_binding, default_binding_or,
-    keybinding_default, keybinding_defaults_report, validate_keybinding_defaults,
-};
-
 /// Compaction mode
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -35,25 +28,6 @@ impl CompactionMode {
             "proactive" => Some(Self::Proactive),
             "semantic" => Some(Self::Semantic),
             _ => None,
-        }
-    }
-}
-
-/// Session picker Enter action: "current-terminal" (default) or "new-terminal".
-/// Ctrl+Enter performs the alternate action.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum SessionPickerResumeAction {
-    NewTerminal,
-    #[default]
-    CurrentTerminal,
-}
-
-impl SessionPickerResumeAction {
-    pub fn alternate(self) -> Self {
-        match self {
-            Self::NewTerminal => Self::CurrentTerminal,
-            Self::CurrentTerminal => Self::NewTerminal,
         }
     }
 }
@@ -636,25 +610,18 @@ impl Default for AgentsConfig {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SwarmSpawnMode {
-    /// Open a visible/headed terminal window. This was the historical default.
-    Visible,
     /// Create the worker in-process without opening a terminal window.
-    Headless,
-    /// Like headless (no terminal window), but the coordinator renders a live
-    /// inline gallery viewport of each worker's streaming output.
     #[default]
-    Inline,
-    /// Try visible first and fall back to headless if a window cannot be opened.
-    Auto,
+    Headless,
 }
 
 impl SwarmSpawnMode {
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "visible" | "headed" => Some(Self::Visible),
             "headless" => Some(Self::Headless),
-            "inline" => Some(Self::Inline),
-            "auto" => Some(Self::Auto),
+            // Accept former UI modes as a migration aid, but always run them
+            // in-process without a frontend.
+            "visible" | "headed" | "inline" | "auto" => Some(Self::Headless),
             _ => None,
         }
     }
@@ -662,10 +629,7 @@ impl SwarmSpawnMode {
     /// Canonical lowercase string for this mode (matches the config/env values).
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Visible => "visible",
             Self::Headless => "headless",
-            Self::Inline => "inline",
-            Self::Auto => "auto",
         }
     }
 }
@@ -700,53 +664,7 @@ impl SwarmStripLayout {
     }
 }
 
-/// Terminal window/pane spawning configuration.
-///
-/// Without a `spawn_hook`, Unix clients inside tmux are opened in a right-side
-/// pane by the built-in launcher. `JCODE_TERMINAL` explicitly selects a terminal
-/// emulator instead.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct TerminalConfig {
-    /// External command that takes over headed session spawns (new terminal
-    /// windows for swarm agents, resume-in-new-terminal, self-dev, restarts).
-    ///
-    /// When set, jcode runs `<spawn_hook> <jcode-binary> <args...>` instead of
-    /// opening a terminal emulator itself, with `JCODE_SPAWN_*` metadata env
-    /// vars describing the spawn (kind, session id, title, cwd, full command).
-    /// This lets multiplexers and wrappers (tmux, kitty remote, zellij, herd
-    /// runners, window managers) decide where and how the session appears.
-    ///
-    /// Example: `spawn_hook = "tmux new-window"` opens each headed spawn as a
-    /// tmux window in the current server. If the hook fails to launch, jcode
-    /// falls back to its built-in terminal detection.
-    ///
-    /// Env override: `JCODE_SPAWN_HOOK` (set empty to disable a config hook).
-    pub spawn_hook: Option<String>,
-    /// External command used to focus/raise an existing session window.
-    ///
-    /// When set, jcode runs the hook (instead of wmctrl/xdotool) whenever it
-    /// wants to bring a session's window to the foreground, with
-    /// `JCODE_FOCUS_SESSION_ID` and `JCODE_FOCUS_TITLE` env vars. Pair this
-    /// with `spawn_hook` so wrappers that own placement (tmux, kitty remote,
-    /// herd) also own focus (e.g. `tmux select-window`, Wayland compositor
-    /// IPC like `niri msg`).
-    ///
-    /// Env override: `JCODE_FOCUS_HOOK` (set empty to disable a config hook).
-    pub focus_hook: Option<String>,
-    /// Terminal used by the macOS Cmd+; launch hotkey and in-app session spawns.
-    ///
-    /// One of: `ghostty`, `iterm2`, `wezterm`, `warp`, `alacritty`, `vscode`,
-    /// `terminal` (Apple Terminal). When set, this is the source of truth for
-    /// which terminal jcode launches into and is preferred over the legacy
-    /// `~/.jcode/preferred_terminal.json` file. Re-run `jcode setup-hotkey`
-    /// after changing it so the generated launcher script picks up the change.
-    ///
-    /// macOS only; ignored on other platforms.
-    pub preferred: Option<String>,
-}
-
-/// Lifecycle hooks: external commands jcode runs at well-defined points.
+/// Lifecycle hooks:/// Lifecycle hooks: external commands jcode runs at well-defined points.
 ///
 /// Hook commands are parsed shell-style (quotes work) but executed directly,
 /// with `JCODE_HOOK_*` env vars describing the event (`JCODE_HOOK_EVENT`,
@@ -856,132 +774,7 @@ pub struct AutoJudgeConfig {
     pub model: Option<String>,
 }
 
-/// Keybinding configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct KeybindingsConfig {
-    /// Scroll up key (default: "ctrl+k")
-    pub scroll_up: String,
-    /// Scroll down key (default: "ctrl+j")
-    pub scroll_down: String,
-    /// Page up key (default: "alt+u")
-    pub scroll_page_up: String,
-    /// Page down key (default: "alt+d")
-    pub scroll_page_down: String,
-    /// Model switch next key (default: "ctrl+tab")
-    pub model_switch_next: String,
-    /// Model switch previous key (default: "ctrl+shift+tab")
-    pub model_switch_prev: String,
-    /// Accept the post-error fallback offer: switch to the next best
-    /// model/auth-method and resend the failed turn (default: "ctrl+y").
-    pub fallback_switch: String,
-    /// Effort increase key (default: "cmd+right" on macOS, "alt+right" elsewhere)
-    pub effort_increase: String,
-    /// Effort decrease key (default: "cmd+left" on macOS, "alt+left" elsewhere)
-    pub effort_decrease: String,
-    /// Centered mode toggle key (default: "alt+c")
-    pub centered_toggle: String,
-    /// Scroll to previous prompt key (default: "ctrl+[")
-    pub scroll_prompt_up: String,
-    /// Scroll to next prompt key (default: "ctrl+]")
-    pub scroll_prompt_down: String,
-    /// Scroll bookmark toggle key (default: "ctrl+g")
-    pub scroll_bookmark: String,
-    /// Scroll up fallback key (default: unset; Cmd+K moves up by prompt on macOS)
-    pub scroll_up_fallback: String,
-    /// Scroll down fallback key (default: unset; Cmd+J moves down by prompt on macOS)
-    pub scroll_down_fallback: String,
-    /// Workspace navigation left key (default: "alt+h")
-    pub workspace_left: String,
-    /// Workspace navigation down key (default: "alt+j")
-    pub workspace_down: String,
-    /// Workspace navigation up key (default: "alt+k")
-    pub workspace_up: String,
-    /// Workspace navigation right key (default: "alt+l")
-    pub workspace_right: String,
-    /// Toggle the side panel (default: "alt+m")
-    pub side_panel_toggle: String,
-    /// Toggle copy/selection mode (default: "alt+y")
-    pub copy_selection_toggle: String,
-    /// Toggle the diagram pane position (default: "alt+t")
-    pub diagram_pane_toggle: String,
-    /// Toggle typing scroll lock (default: "alt+s")
-    pub typing_scroll_lock_toggle: String,
-    /// Cycle inline diff display mode (default: "alt+g")
-    pub diff_mode_cycle: String,
-    /// Toggle the info widget (default: "alt+i")
-    pub info_widget_toggle: String,
-    /// Show/dismiss the session todo list as an inline card in the chat
-    /// transcript (default: "alt+x")
-    pub todo_card_toggle: String,
-    /// Focus/unfocus the inline swarm panel for keyboard navigation (default:
-    /// "alt+n"; alt+↑/↓ select, alt+o pops out, alt+shift+p opens the swarm
-    /// prompt, esc exits). Active only when `agents.swarm_spawn_mode = "inline"`
-    /// and the session manages swarm agents.
-    pub swarm_panel_focus: String,
-    /// Spawn a fresh jcode session in a new terminal window (default: unbound).
-    /// Example: "alt+enter".
-    pub new_terminal: String,
-    /// Open the `/resume` session picker (default: "cmd+b" on macOS, "alt+r"
-    /// elsewhere). Set "" to disable.
-    pub open_resume: String,
-    /// Session picker Enter action: "current-terminal" (default) or "new-terminal".
-    /// Ctrl+Enter performs the alternate action.
-    pub session_picker_enter: SessionPickerResumeAction,
-}
-
-impl Default for KeybindingsConfig {
-    fn default() -> Self {
-        // Pull platform-appropriate defaults from the single source of truth in
-        // `keybindings.rs`. This is where the macOS vs Windows/Linux split takes
-        // effect: each field resolves to its own platform's default binding.
-        let p = KeybindingPlatform::current();
-        let get = |id: &str, fallback: &'static str| {
-            default_binding(id, p).unwrap_or(fallback).to_string()
-        };
-        Self {
-            scroll_up: get("scroll_up", "ctrl+k"),
-            scroll_down: get("scroll_down", "ctrl+j"),
-            scroll_page_up: get("scroll_page_up", "alt+u"),
-            scroll_page_down: get("scroll_page_down", "alt+d"),
-            model_switch_next: get("model_switch_next", "ctrl+tab"),
-            model_switch_prev: get("model_switch_prev", "ctrl+shift+tab"),
-            fallback_switch: get("fallback_switch", "ctrl+y"),
-            effort_increase: get("effort_increase", "alt+right"),
-            effort_decrease: get("effort_decrease", "alt+left"),
-            centered_toggle: get("centered_toggle", "alt+c"),
-            scroll_prompt_up: get("scroll_prompt_up", "ctrl+["),
-            scroll_prompt_down: get("scroll_prompt_down", "ctrl+]"),
-            scroll_bookmark: get("scroll_bookmark", "ctrl+g"),
-            scroll_up_fallback: get("scroll_up_fallback", ""),
-            scroll_down_fallback: get("scroll_down_fallback", ""),
-            workspace_left: get("workspace_left", "alt+h"),
-            workspace_down: get("workspace_down", "alt+j"),
-            workspace_up: get("workspace_up", "alt+k"),
-            workspace_right: get("workspace_right", "alt+l"),
-            side_panel_toggle: get("side_panel_toggle", "alt+m"),
-            copy_selection_toggle: get("copy_selection_toggle", "alt+y"),
-            diagram_pane_toggle: get("diagram_pane_toggle", "alt+t"),
-            typing_scroll_lock_toggle: get("typing_scroll_lock_toggle", "alt+s"),
-            diff_mode_cycle: get("diff_mode_cycle", "alt+g"),
-            info_widget_toggle: get("info_widget_toggle", "alt+i"),
-            todo_card_toggle: get("todo_card_toggle", "alt+x"),
-            swarm_panel_focus: get("swarm_panel_focus", "alt+n"),
-            new_terminal: get("new_terminal", ""),
-            open_resume: get(
-                "open_resume",
-                if cfg!(target_os = "macos") {
-                    "cmd+b"
-                } else {
-                    "alt+r"
-                },
-            ),
-            session_picker_enter: SessionPickerResumeAction::CurrentTerminal,
-        }
-    }
-}
-
-/// How to display file diffs from edit/write tools
+/// How to display file diffs from edit/write tools/// How to display file diffs from edit/write tools
 /// Display/UI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -1366,8 +1159,6 @@ pub struct AmbientConfig {
     pub proactive_work: bool,
     /// Proactive work branch prefix (default: "ambient/")
     pub work_branch_prefix: String,
-    /// Show ambient cycle in a terminal window (default: true)
-    pub visible: bool,
 }
 
 impl Default for AmbientConfig {
@@ -1383,46 +1174,6 @@ impl Default for AmbientConfig {
             pause_on_active_session: true,
             proactive_work: true,
             work_branch_prefix: "ambient/".to_string(),
-            visible: true,
-        }
-    }
-}
-
-/// Desktop notification configuration for interactive sessions.
-///
-/// Unlike `[safety]` (ambient-mode ntfy/email/channel notifications), this
-/// section controls lightweight local desktop notifications for the normal
-/// interactive TUI, e.g. "agent finished a long turn".
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct NotificationsConfig {
-    /// Send a desktop notification when an agent turn completes (default: true).
-    /// Notifications fire only for long turns (see thresholds below) and, by
-    /// default, only while the terminal window is unfocused.
-    pub turn_complete: bool,
-    /// Minimum turn duration, in seconds, before a completed turn notifies
-    /// (default: 120).
-    pub turn_complete_min_secs: u64,
-    /// Lower duration threshold, in seconds, used when the session has todos
-    /// recorded, since todos indicate longer task-style work (default: 30).
-    pub turn_complete_todo_min_secs: u64,
-    /// Only notify while the terminal window is unfocused (default: true).
-    /// Requires a terminal that reports focus events (most modern terminals).
-    pub turn_complete_only_when_unfocused: bool,
-    /// macOS Notification Center sound name played on turn completion
-    /// (e.g. "Glass", "Ping", "Hero"). Empty string disables the sound.
-    /// Ignored on non-macOS platforms. Default: "Glass".
-    pub turn_complete_sound: String,
-}
-
-impl Default for NotificationsConfig {
-    fn default() -> Self {
-        Self {
-            turn_complete: true,
-            turn_complete_min_secs: 120,
-            turn_complete_todo_min_secs: 30,
-            turn_complete_only_when_unfocused: true,
-            turn_complete_sound: "Glass".to_string(),
         }
     }
 }
@@ -1435,8 +1186,6 @@ pub struct SafetyConfig {
     pub ntfy_topic: Option<String>,
     /// ntfy.sh server URL (default: https://ntfy.sh)
     pub ntfy_server: String,
-    /// Enable desktop notifications via notify-send (default: true)
-    pub desktop_notifications: bool,
     /// Enable email notifications (default: false)
     pub email_enabled: bool,
     /// Email recipient
@@ -1487,10 +1236,6 @@ pub struct SafetyConfig {
     pub jade_relay_session_id: Option<String>,
     /// Enable Jade relay prompt → agent directive feature (default: false)
     pub jade_relay_reply_enabled: bool,
-    /// Enable Jade relay device launch commands that open headed local sessions (default: false)
-    pub jade_relay_launch_enabled: bool,
-    /// Default working directory for remotely launched headed sessions
-    pub jade_relay_launch_working_dir: Option<String>,
 }
 
 impl Default for SafetyConfig {
@@ -1498,7 +1243,6 @@ impl Default for SafetyConfig {
         Self {
             ntfy_topic: None,
             ntfy_server: "https://ntfy.sh".to_string(),
-            desktop_notifications: true,
             email_enabled: false,
             email_to: None,
             email_smtp_host: None,
@@ -1524,30 +1268,6 @@ impl Default for SafetyConfig {
             jade_relay_user_id: None,
             jade_relay_session_id: None,
             jade_relay_reply_enabled: false,
-            jade_relay_launch_enabled: false,
-            jade_relay_launch_working_dir: None,
-        }
-    }
-}
-
-/// WebSocket gateway configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct GatewayConfig {
-    /// Enable the WebSocket gateway (default: false)
-    pub enabled: bool,
-    /// TCP port to listen on (default: 7643)
-    pub port: u16,
-    /// Bind address (default: 0.0.0.0)
-    pub bind_addr: String,
-}
-
-impl Default for GatewayConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            port: 7643,
-            bind_addr: "0.0.0.0".to_string(),
         }
     }
 }
@@ -1573,50 +1293,4 @@ impl Default for PowerConfig {
             prevent_sleep_while_streaming: true,
         }
     }
-}
-
-/// A single global launch hotkey: a chord plus the directory it opens jcode in.
-///
-/// `dir` is usually an absolute path, but a few sentinels keep dynamic targets
-/// working without rewriting config on every launch:
-/// - `$HOME` -> the user's home directory.
-/// - `$LAST_DIR` -> the most recent non-home project directory jcode ran in.
-/// - `$LAST_REPO` -> the most recent jcode repo (for self-dev).
-///
-/// `self_dev = true` opens the directory as a self-dev session (passes the
-/// `self-dev` subcommand). `label` is an optional human name used in notices.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LaunchHotkeyEntry {
-    /// jcode-style chord string, e.g. `cmd+;`, `cmd+[`, `cmd+shift+'`.
-    pub chord: String,
-    /// Directory to open (absolute path or a `$HOME`/`$LAST_DIR`/`$LAST_REPO`
-    /// sentinel).
-    pub dir: String,
-    /// Optional short label (e.g. the repo's directory name) for notices.
-    #[serde(default)]
-    pub label: String,
-    /// Open as a self-dev session instead of a normal session.
-    #[serde(default)]
-    pub self_dev: bool,
-}
-
-/// Configuration for the global "launch a new jcode" hotkeys (macOS).
-///
-/// When `entries` is empty, jcode uses its built-in defaults (`Cmd+;` -> home,
-/// `Cmd+'` -> last project, `Cmd+Shift+'` -> self-dev). Auto-import can bake a
-/// richer, per-repo mapping here once: the top repo on `Cmd+;`, home on
-/// `Cmd+'`, and the next repos on `Cmd+[` / `Cmd+]` / `Cmd+\`. Once baked the
-/// mapping is static and does not move around as the user's activity changes.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct LaunchHotkeysConfig {
-    /// Whether the global launch hotkeys are installed at all. `None` means
-    /// "not decided yet" (fall back to the legacy auto-install gating); `Some`
-    /// is an explicit user/import choice.
-    pub enabled: Option<bool>,
-    /// Explicit chord -> directory mapping. Empty = use built-in defaults.
-    pub entries: Vec<LaunchHotkeyEntry>,
-    /// Set true once auto-import has populated `entries`, so we only bake the
-    /// per-repo mapping a single time and never clobber later user edits.
-    pub imported: bool,
 }

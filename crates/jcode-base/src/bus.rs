@@ -1,5 +1,4 @@
 use crate::message::ToolCall;
-use crate::side_panel::SidePanelSnapshot;
 use crate::todo::TodoItem;
 pub use jcode_background_types::{
     BackgroundTaskCompleted, BackgroundTaskProgress, BackgroundTaskProgressEvent,
@@ -314,12 +313,6 @@ pub struct ProductivityReportPayload {
     pub png_path: std::path::PathBuf,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SidePanelUpdated {
-    pub session_id: String,
-    pub snapshot: SidePanelSnapshot,
-}
-
 #[derive(Clone, Debug)]
 pub enum UpdateStatus {
     Checking,
@@ -398,7 +391,7 @@ pub enum BusEvent {
     UsageReport(Vec<jcode_usage_types::ProviderUsage>),
     /// Progressive usage report update while providers are still loading
     UsageReportProgress(jcode_usage_types::ProviderUsageProgress),
-    /// OAuth/login flow completed in the background
+    /// Credential activation completed in the background
     LoginCompleted(LoginCompleted),
     /// First-run onboarding finished validating the auto-selected default model.
     OnboardingModelValidated(OnboardingModelValidated),
@@ -416,19 +409,6 @@ pub enum BusEvent {
     UpdateStatus(UpdateStatus),
     /// Interactive client update status for a specific session
     SessionUpdateStatus(SessionUpdateStatus),
-    /// External dictation command completed with transcript text
-    DictationCompleted {
-        dictation_id: String,
-        session_id: Option<String>,
-        text: String,
-        mode: crate::protocol::TranscriptMode,
-    },
-    /// External dictation command failed
-    DictationFailed {
-        dictation_id: String,
-        session_id: Option<String>,
-        message: String,
-    },
     /// Background compaction task finished (check_and_apply should be called)
     CompactionFinished,
     /// Provider's available models list may have changed
@@ -444,8 +424,6 @@ pub enum BusEvent {
         message: String,
         open_picker: bool,
     },
-    /// Side panel pages were updated for a session
-    SidePanelUpdated(SidePanelUpdated),
     /// Deferred Mermaid rendering completed and cached content may now be visible
     MermaidRenderCompleted,
     /// Productivity report finished generating off the UI thread

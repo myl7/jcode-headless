@@ -336,15 +336,6 @@ if [ "$(uname -s)" = "Darwin" ]; then
   xattr -d com.apple.quarantine "$dest_version_dir/$bin_name" 2>/dev/null || true
 fi
 
-hotkey_setup_ready=false
-case "$(uname -s)" in
-Darwin|Linux)
-  if "$launcher_path" setup-hotkey </dev/null >/dev/null 2>&1; then
-    hotkey_setup_ready=true
-  fi
-  ;;
-esac
-
 # Retire any background server still running the old binary so the freshly
 # installed version is picked up without the user having to kill a daemon by
 # hand (issue #291). We use the graceful `server reload` path, which hands live
@@ -505,20 +496,12 @@ else
   info "✅ jcode $VERSION installed successfully!"
   echo ""
 
-  if [ "$(uname -s)" = "Darwin" ]; then
-    if [ "$hotkey_setup_ready" = true ]; then
-      info "Global hotkey ready: Cmd+; launches a new jcode from anywhere, system-wide"
-    else
-      info "Tip: run 'jcode setup-hotkey' so Cmd+; launches jcode system-wide on macOS"
-    fi
-  fi
-
   if command -v jcode >/dev/null 2>&1; then
-    info "Run 'jcode' to get started."
+    info "Run 'jcode --help' to get started."
   else
     echo "  To start using jcode right now, run:"
     echo ""
-    printf '    \033[1;32mexport PATH="%s:\$PATH" && jcode\033[0m\n' "$INSTALL_DIR"
+    printf '    \033[1;32mexport PATH="%s:\$PATH" && jcode --help\033[0m\n' "$INSTALL_DIR"
     echo ""
     echo "  Future terminal sessions will have jcode on PATH automatically."
   fi

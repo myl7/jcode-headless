@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-WATCHED_CRATES = ["jcode-base", "jcode-app-core", "jcode-tui", "jcode"]
+WATCHED_CRATES = ["jcode-base", "jcode-app-core", "jcode"]
 
 
 @dataclass
@@ -137,10 +137,6 @@ def collect_stats(package: dict[str, Any], workspace_names: set[str]) -> CrateSt
 def target_state_violations(stats_by_name: dict[str, CrateStats]) -> list[str]:
     violations: list[str] = []
 
-    tui = stats_by_name.get("jcode-tui")
-    if tui and "jcode-app-core" in tui.normal_workspace_deps:
-        violations.append("target-state: jcode-tui still directly depends on jcode-app-core")
-
     app_core = stats_by_name.get("jcode-app-core")
     if app_core and "jcode-base" in app_core.normal_workspace_deps:
         violations.append("target-state: jcode-app-core still directly depends on jcode-base")
@@ -163,7 +159,7 @@ def target_state_violations(stats_by_name: dict[str, CrateStats]) -> list[str]:
 
     for crate in stats_by_name.values():
         for glob in crate.glob_reexports:
-            if crate.name in {"jcode", "jcode-app-core", "jcode-tui"}:
+            if crate.name in {"jcode", "jcode-app-core"}:
                 violations.append(f"target-state: broad glob re-export remains in {glob}")
 
     return violations

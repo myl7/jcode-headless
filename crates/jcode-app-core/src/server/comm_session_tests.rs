@@ -1,24 +1,22 @@
 #![cfg_attr(test, allow(clippy::await_holding_lock))]
 
 use super::{
-    CoordinatorSpawnIdentity, ensure_spawn_coordinator_swarm, prepare_visible_spawn_session,
-    register_visible_spawned_member, resolve_coordinator_spawn_identity, resolve_spawn_working_dir,
-    resolve_stop_target_session, resolve_swarm_spawn_selection, spawn_admission_lock,
-    swarm_stop_allowed_by_owner,
+    CoordinatorSpawnIdentity, ensure_spawn_coordinator_swarm, resolve_coordinator_spawn_identity,
+    resolve_spawn_working_dir, resolve_stop_target_session, resolve_swarm_spawn_selection,
+    spawn_admission_lock, swarm_stop_allowed_by_owner,
 };
 use crate::agent::Agent;
 use crate::message::{Message, ToolDefinition};
 use crate::protocol::{NotificationType, ServerEvent};
 use crate::provider::{EventStream, Provider};
-use crate::server::{SwarmEventType, SwarmMember, VersionedPlan};
+use crate::server::{SwarmMember, VersionedPlan};
 use crate::tool::Registry;
 use anyhow::Result;
 use async_trait::async_trait;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 use std::time::Instant;
-use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 struct MockProvider;
 
@@ -189,266 +187,6 @@ async fn stop_target_rejects_ambiguous_friendly_name() {
         .await
         .expect_err("ambiguous friendly names should be rejected");
     assert!(err.contains("Ambiguous swarm session 'bear'"));
-}
-
-#[tokio::test]
-async fn register_visible_spawned_member_marks_startup_as_running() {
-    let swarm_members = Arc::new(RwLock::new(HashMap::new()));
-    let swarms_by_id = Arc::new(RwLock::new(HashMap::new()));
-    let event_history = Arc::new(RwLock::new(VecDeque::new()));
-    let event_counter = Arc::new(AtomicU64::new(0));
-    let (swarm_event_tx, _swarm_event_rx) = broadcast::channel(8);
-
-    register_visible_spawned_member(
-        "child-1",
-        "swarm-1",
-        Some("/tmp/worktree"),
-        true,
-        Some("owner"),
-        &swarm_members,
-        &swarms_by_id,
-        &event_history,
-        &event_counter,
-        &swarm_event_tx,
-    )
-    .await;
-
-    let members = swarm_members.read().await;
-    let member = members.get("child-1").expect("spawned member should exist");
-    assert_eq!(member.status, "running");
-    assert_eq!(member.detail.as_deref(), Some("startup queued"));
-    assert_eq!(member.swarm_id.as_deref(), Some("swarm-1"));
-    assert_eq!(
-        member.working_dir.as_deref(),
-        Some(std::path::Path::new("/tmp/worktree"))
-    );
-    drop(members);
-
-    assert!(
-        swarms_by_id
-            .read()
-            .await
-            .get("swarm-1")
-            .is_some_and(|members| members.contains("child-1"))
-    );
-
-    let history = event_history.read().await;
-    assert!(history.iter().any(|event| {
-            event.session_id == "child-1"
-                && matches!(event.event, SwarmEventType::MemberChange { ref action } if action == "joined")
-        }));
-}
-
-#[test]
-fn prepare_visible_spawn_session_persists_startup_before_launch() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-    let startup = "Please start by auditing prompt delivery.";
-
-    let (session_id, launched) = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        None,
-        None,
-        None,
-        None,
-        false,
-        Some(startup),
-        |session_id, _cwd: &std::path::Path, _selfdev, provider_key| {
-            assert_eq!(provider_key, None);
-            let path = crate::storage::jcode_dir()
-                .expect("jcode dir")
-                .join(format!("client-input-{}", session_id));
-            let data = std::fs::read_to_string(&path).expect("startup file should exist");
-            assert!(
-                data.contains(startup),
-                "startup payload should be written before launch"
-            );
-            assert!(
-                data.contains(r#""submit_on_restore":true"#),
-                "startup payload should auto-submit on restore"
-            );
-            Ok(true)
-        },
-    )
-    .expect("visible spawn preparation should succeed");
-
-    assert!(launched);
-    let path = crate::storage::jcode_dir()
-        .expect("jcode dir")
-        .join(format!("client-input-{}", session_id));
-    assert!(
-        path.exists(),
-        "startup file should remain for launched visible session"
-    );
-
-    crate::env::remove_var("JCODE_HOME");
-}
-
-#[test]
-fn prepare_visible_spawn_session_cleans_startup_when_launch_not_started() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-
-    let (session_id, launched) = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        None,
-        None,
-        None,
-        None,
-        false,
-        Some("Do the thing."),
-        |_session_id, _cwd: &std::path::Path, _selfdev, _provider_key| Ok(false),
-    )
-    .expect("visible spawn preparation should succeed even when launch is skipped");
-
-    assert!(!launched);
-    let path = crate::storage::jcode_dir()
-        .expect("jcode dir")
-        .join(format!("client-input-{}", session_id));
-    assert!(
-        !path.exists(),
-        "startup file should be removed when visible launch does not start"
-    );
-    assert!(
-        !crate::session::session_exists(&session_id),
-        "prepared session should be cleaned up when visible launch does not start"
-    );
-
-    crate::env::remove_var("JCODE_HOME");
-}
-
-#[test]
-fn prepare_visible_spawn_session_cleans_session_when_launch_errors() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-
-    let error = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        None,
-        None,
-        None,
-        None,
-        false,
-        Some("Do the thing."),
-        |_session_id, _cwd: &std::path::Path, _selfdev, _provider_key| {
-            Err(anyhow::anyhow!("launch failed"))
-        },
-    )
-    .expect_err("visible spawn preparation should surface launch error");
-
-    assert!(error.to_string().contains("launch failed"));
-    let sessions_dir = crate::storage::jcode_dir()
-        .expect("jcode dir")
-        .join("sessions");
-    let remaining_sessions = std::fs::read_dir(&sessions_dir)
-        .map(|entries| entries.count())
-        .unwrap_or(0);
-    assert_eq!(
-        remaining_sessions, 0,
-        "failed visible launch should not leave orphan prepared sessions"
-    );
-
-    crate::env::remove_var("JCODE_HOME");
-}
-
-#[test]
-fn prepare_visible_spawn_session_persists_and_launches_provider_key_for_openrouter_model() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-    let (session_id, launched) = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        Some("openai/gpt-5.4@OpenAI"),
-        None,
-        None,
-        None,
-        false,
-        None,
-        |_session_id, _cwd: &std::path::Path, _selfdev, provider_key| {
-            assert_eq!(provider_key, Some("openrouter"));
-            Ok(true)
-        },
-    )
-    .expect("visible spawn preparation should succeed");
-
-    assert!(launched);
-    let session = crate::session::Session::load(&session_id).expect("prepared session should save");
-    assert_eq!(session.model.as_deref(), Some("openai/gpt-5.4@OpenAI"));
-    assert_eq!(session.provider_key.as_deref(), Some("openrouter"));
-
-    crate::env::remove_var("JCODE_HOME");
-}
-
-#[test]
-fn prepare_visible_spawn_session_persists_requested_effort() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-    let (session_id, launched) = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        Some("gpt-5.5"),
-        None,
-        None,
-        Some("low"),
-        false,
-        None,
-        |_session_id, _cwd: &std::path::Path, _selfdev, _provider_key| Ok(true),
-    )
-    .expect("visible spawn preparation should succeed");
-
-    assert!(launched);
-    let session = crate::session::Session::load(&session_id).expect("prepared session should save");
-    assert_eq!(session.model.as_deref(), Some("gpt-5.5"));
-    assert_eq!(
-        session.reasoning_effort.as_deref(),
-        Some("low"),
-        "requested effort should persist so the headed client restores it"
-    );
-
-    crate::env::remove_var("JCODE_HOME");
-}
-
-#[test]
-fn prepare_visible_spawn_session_prefers_parent_provider_key_over_model_guess() {
-    let _guard = crate::storage::lock_test_env();
-    let temp_home = tempfile::TempDir::new().expect("temp home");
-    crate::env::set_var("JCODE_HOME", temp_home.path());
-
-    let worktree = tempfile::TempDir::new().expect("temp worktree");
-    let (session_id, launched) = prepare_visible_spawn_session(
-        Some(worktree.path().to_str().expect("utf8 worktree path")),
-        Some("gpt-5.4"),
-        Some("ollama"),
-        None,
-        None,
-        false,
-        None,
-        |_session_id, _cwd: &std::path::Path, _selfdev, provider_key| {
-            assert_eq!(provider_key, Some("ollama"));
-            Ok(true)
-        },
-    )
-    .expect("visible spawn preparation should succeed");
-
-    assert!(launched);
-    let session = crate::session::Session::load(&session_id).expect("prepared session should save");
-    assert_eq!(session.model.as_deref(), Some("gpt-5.4"));
-    assert_eq!(session.provider_key.as_deref(), Some("ollama"));
-
-    crate::env::remove_var("JCODE_HOME");
 }
 
 fn coordinator_identity(

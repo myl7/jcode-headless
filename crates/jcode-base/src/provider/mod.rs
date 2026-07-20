@@ -52,7 +52,7 @@ pub use catalog_routes::{
 pub use jcode_provider_core::attempt_tracker;
 pub use jcode_provider_core::cli_provider_arg_for_session_key;
 pub use jcode_provider_core::{
-    ALL_CLAUDE_MODELS, ALL_OPENAI_MODELS, CHATGPT_WEB_MODEL, CHEAPNESS_REFERENCE_INPUT_TOKENS,
+    ALL_CLAUDE_MODELS, ALL_OPENAI_MODELS, CHEAPNESS_REFERENCE_INPUT_TOKENS,
     CHEAPNESS_REFERENCE_OUTPUT_TOKENS, CredentialMode, DEFAULT_CONTEXT_LIMIT, EventStream,
     JCODE_USER_AGENT, ModelCapabilities, ModelCatalogRefreshSummary, ModelRoute,
     ModelRouteApiMethod, NativeCompactionResult, NativeToolResult, NativeToolResultSender,
@@ -69,10 +69,10 @@ pub use jcode_provider_core::{
 };
 pub use jcode_provider_core::{ProviderFailoverPrompt, parse_failover_prompt_message};
 pub use route_builders::{
-    build_anthropic_oauth_route, build_chatgpt_web_route, build_copilot_route,
-    build_openai_api_key_route, build_openai_oauth_route, build_openrouter_auto_route,
-    build_openrouter_endpoint_route, build_openrouter_fallback_provider_route,
-    is_listable_model_name, listable_model_names_from_routes, openrouter_catalog_model_id,
+    build_anthropic_oauth_route, build_copilot_route, build_openai_api_key_route,
+    build_openai_oauth_route, build_openrouter_auto_route, build_openrouter_endpoint_route,
+    build_openrouter_fallback_provider_route, is_listable_model_name,
+    listable_model_names_from_routes, openrouter_catalog_model_id,
 };
 pub(crate) use routing::{
     anthropic_api_key_route_availability, anthropic_oauth_route_availability,
@@ -1000,9 +1000,7 @@ impl MultiProvider {
                 } else if let Some(claude) = self.claude_provider() {
                     claude.set_model(&model)?;
                 } else {
-                    anyhow::bail!(
-                        "Claude credentials not available. Run `jcode login --provider claude` first."
-                    );
+                    anyhow::bail!("Claude credentials not available in JCODE_HOME.");
                 }
                 self.set_active_provider(ActiveProvider::Claude);
                 Ok(())
@@ -1021,9 +1019,7 @@ impl MultiProvider {
                             model
                         );
                     }
-                    anyhow::bail!(
-                        "OpenAI credentials not available. Run `jcode login --provider openai` first."
-                    );
+                    anyhow::bail!("OpenAI credentials not available in JCODE_HOME.");
                 };
                 if let Some(mode) = openai_credential_mode {
                     openai.set_credential_mode(mode)?;
@@ -1034,9 +1030,7 @@ impl MultiProvider {
             }
             ActiveProvider::Copilot => {
                 let Some(copilot) = self.copilot_provider() else {
-                    anyhow::bail!(
-                        "GitHub Copilot credentials not available. Run `jcode login --provider copilot` first."
-                    );
+                    anyhow::bail!("GitHub Copilot credentials not available in JCODE_HOME.");
                 };
                 copilot.set_model(model)?;
                 self.set_active_provider(ActiveProvider::Copilot);
@@ -1044,9 +1038,7 @@ impl MultiProvider {
             }
             ActiveProvider::Antigravity => {
                 let Some(antigravity) = self.antigravity_provider() else {
-                    anyhow::bail!(
-                        "Antigravity credentials not available. Run `jcode login --provider antigravity` first."
-                    );
+                    anyhow::bail!("Antigravity credentials not available in JCODE_HOME.");
                 };
                 antigravity.set_model(model)?;
                 self.set_active_provider(ActiveProvider::Antigravity);
@@ -1054,9 +1046,7 @@ impl MultiProvider {
             }
             ActiveProvider::Gemini => {
                 let Some(gemini) = self.gemini_provider() else {
-                    anyhow::bail!(
-                        "Gemini credentials not available. Run `jcode login --provider gemini` first."
-                    );
+                    anyhow::bail!("Gemini credentials not available in JCODE_HOME.");
                 };
                 gemini.set_model(model)?;
                 self.set_active_provider(ActiveProvider::Gemini);
@@ -1064,9 +1054,7 @@ impl MultiProvider {
             }
             ActiveProvider::Cursor => {
                 let Some(cursor) = self.cursor_provider() else {
-                    anyhow::bail!(
-                        "Cursor credentials not available. Run `jcode login --provider cursor` first."
-                    );
+                    anyhow::bail!("Cursor credentials not available in JCODE_HOME.");
                 };
                 cursor.set_model(model)?;
                 self.set_active_provider(ActiveProvider::Cursor);
@@ -1129,7 +1117,7 @@ impl MultiProvider {
 
                 let Some(openrouter) = self.openrouter_provider() else {
                     anyhow::bail!(
-                        "OpenRouter/OpenAI-compatible credentials not available. Set the configured API key or run `jcode login --provider openrouter` first."
+                        "OpenRouter/OpenAI-compatible credentials not available. Set the configured API key."
                     );
                 };
                 openrouter.set_model(model)?;
@@ -1151,7 +1139,7 @@ impl MultiProvider {
         let resolved = crate::provider_catalog::resolve_openai_compatible_profile(profile);
         if !crate::provider_catalog::openai_compatible_profile_is_configured(profile) {
             anyhow::bail!(
-                "{} credentials not available. Run `jcode login --provider {}` first.",
+                "{} credentials not available. Set {} or provision its configured API key.",
                 resolved.display_name,
                 resolved.id,
             );

@@ -92,25 +92,19 @@ async fn maybe_run_auth_test_smoke_for_choice(
     }
 }
 
-pub(crate) async fn run_post_login_validation(
+pub(crate) async fn run_credential_validation_quiet(
     provider: crate::provider_catalog::LoginProviderDescriptor,
 ) -> Result<()> {
-    run_post_login_validation_inner(provider, true).await
+    run_credential_validation_inner(provider, false).await
 }
 
-pub(crate) async fn run_post_login_validation_quiet(
-    provider: crate::provider_catalog::LoginProviderDescriptor,
-) -> Result<()> {
-    run_post_login_validation_inner(provider, false).await
-}
-
-async fn run_post_login_validation_inner(
+async fn run_credential_validation_inner(
     provider: crate::provider_catalog::LoginProviderDescriptor,
     verbose: bool,
 ) -> Result<()> {
     let Some(choice) = super::provider_init::choice_for_login_provider(provider) else {
         crate::logging::auth_event(
-            "post_login_validation_skipped",
+            "credential_validation_skipped",
             provider.id,
             &[("reason", "no_runtime_provider_choice")],
         );
@@ -125,14 +119,14 @@ async fn run_post_login_validation_inner(
 
     super::provider_init::apply_login_provider_profile_env(provider);
     crate::logging::auth_event(
-        "post_login_validation_started",
+        "credential_validation_started",
         provider.id,
         &[("choice", choice.as_arg_value())],
     );
 
     if verbose {
         eprintln!(
-            "\nValidating {} login with live auth/runtime checks...",
+            "\nValidating {} credentials with live auth/runtime checks...",
             provider.display_name
         );
     }
@@ -168,7 +162,7 @@ async fn run_post_login_validation_inner(
     persist_auth_test_report(&report, None);
     let step_count = report.steps.len().to_string();
     crate::logging::auth_event(
-        "post_login_validation_completed",
+        "credential_validation_completed",
         provider.id,
         &[
             ("choice", choice.as_arg_value()),
@@ -184,13 +178,13 @@ async fn run_post_login_validation_inner(
         Ok(())
     } else if AuthTestTarget::from_provider_choice(&choice).is_some() {
         anyhow::bail!(
-            "Post-login validation failed for {}. Credentials were saved, but jcode could not verify runtime readiness. Re-run `jcode auth-test --provider {}` for details.",
+            "Credential validation failed for {}. jcode could not verify runtime readiness. Re-run `jcode auth-test --provider {}` for details.",
             provider.display_name,
             choice.as_arg_value()
         )
     } else {
         anyhow::bail!(
-            "Post-login validation failed for {}. Credentials were saved, but jcode could not verify runtime readiness. Re-test with `jcode --provider {} run \"Reply with exactly AUTH_TEST_OK and nothing else.\"` after fixing the provider/runtime.",
+            "Credential validation failed for {}. Re-test with `jcode --provider {} run \"Reply with exactly AUTH_TEST_OK and nothing else.\"` after fixing the provider/runtime.",
             provider.display_name,
             choice.as_arg_value()
         )

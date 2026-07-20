@@ -16,101 +16,6 @@ impl Config {
 # Environment variables override these settings.
 # Run `/config` in jcode to see current settings.
 
-[keybindings]
-# Scroll keys (vim-style by default)
-# Supports: ctrl, alt, shift modifiers + any key
-# Examples: "ctrl+k", "alt+j", "ctrl+shift+up", "pageup"
-scroll_up = "ctrl+k"
-scroll_down = "ctrl+j"
-scroll_page_up = "alt+u"
-scroll_page_down = "alt+d"
-
-# Model switching
-model_switch_next = "ctrl+tab"
-model_switch_prev = "ctrl+shift+tab"
-
-# Reasoning effort switching (OpenAI models)
-# Defaults: cmd+right / cmd+left on macOS, alt+right / alt+left elsewhere.
-# Alt/Option+Left/Right move by word in the input box.
-effort_increase = "@EFFORT_INCREASE@"
-effort_decrease = "@EFFORT_DECREASE@"
-
-# Centered mode toggle key
-centered_toggle = "alt+c"
-
-# Jump between user prompts
-# Ctrl+1..4 resizes the pinned side panel to 25/50/75/100%.
-# Ctrl+5..9 jumps by recency rank (5 = 5th most recent).
-scroll_prompt_up = "ctrl+["
-scroll_prompt_down = "ctrl+]"
-
-# Scroll bookmark toggle (stash position, jump to bottom, press again to return)
-scroll_bookmark = "ctrl+g"
-
-# Optional fallback scroll bindings (useful on macOS terminals that forward Command)
-# Leave unset by default; on macOS Cmd+K / Cmd+J move up / down by prompt instead.
-scroll_up_fallback = ""
-scroll_down_fallback = ""
-
-# Workspace navigation (Niri-style)
-# Comma-separate multiple bindings to add aliases.
-workspace_left = "alt+h"
-workspace_down = "alt+j"
-workspace_up = "alt+k"
-workspace_right = "alt+l"
-
-# Pane / mode toggles
-side_panel_toggle = "alt+m"
-copy_selection_toggle = "alt+y"
-diagram_pane_toggle = "alt+t"
-typing_scroll_lock_toggle = "alt+s"
-diff_mode_cycle = "alt+g"
-info_widget_toggle = "alt+i"
-# Focus the inline swarm panel (list of agents this session manages). Press
-# again to cycle agents. While focused: alt+↑/↓ select, alt+o pops the agent
-# out to a new terminal, esc exits. Plain typing still goes to the chat input.
-# Active only with agents.swarm_spawn_mode = "inline".
-swarm_panel_focus = "alt+n"
-
-# Spawn a fresh jcode session in a new terminal window, reusing the current
-# session's working directory. Companion to the system-wide launch hotkeys.
-# `jcode setup-hotkey` installs these three global launch hotkeys on macOS,
-# Linux niri/Hyprland/sway/i3, and Windows. The Cmd modifier maps to Super on
-# Linux and Alt on Windows. Windows also adds the physical Copilot key:
-#   Cmd+;        new jcode in your home directory
-#   Cmd+'        new jcode in your last project directory
-#   Cmd+Shift+'  new jcode self-dev session (last jcode repo)
-# Default: Cmd+Shift+; on macOS, Alt+Shift+; elsewhere. Set "" to disable.
-# Note: some macOS terminals intercept Cmd combos; if so, pick another binding.
-# new_terminal = "cmd+shift+;"
-
-# Open the /resume session picker.
-# Default: Cmd+B on macOS, Alt+R on Windows/Linux. Set "" to disable.
-# open_resume = "cmd+b"
-
-# /resume picker Enter behavior. Options: "current-terminal" or "new-terminal".
-# By default Enter resumes in this terminal; Ctrl+Enter performs the alternate action.
-session_picker_enter = "current-terminal"
-
-[dictation]
-# External speech-to-text command.
-# The command should record/transcribe speech and print the final transcript to stdout.
-# You can include any tool-specific flags here too, for example a grammar target.
-# Examples:
-# command = "~/.local/bin/my-whisper-script"
-# command = "~/.local/bin/my-whisper-script --grammar-target code"
-command = ""
-
-# How to apply the transcript inside jcode: insert|append|replace|send
-mode = "send"
-
-# Optional in-app hotkey to trigger dictation. Set to "off" to disable.
-# Example: "alt+;"
-key = "off"
-
-# Max seconds to wait for the dictation command to finish (0 = no timeout)
-timeout_secs = 90
-
 [display]
 # Diff display mode: "off", "inline" (default), "full-inline", "pinned" (dedicated pane), or "file"
 diff_mode = "inline"
@@ -343,14 +248,9 @@ cross_provider_failover = "countdown"
 # Env override: JCODE_SWARM_MODEL
 # swarm_model = "inherit"
 #
-# How swarm-created agents are spawned:
-#   "inline"   - in-process (no window), shown as a live gallery viewport in the coordinator (default)
-#   "visible"  - open a headed terminal window (alias: "headed")
-#   "headless" - create the worker in-process with no terminal window
-#   "auto"     - try visible first, fall back to headless if no window can open
-# The swarm tool's per-call `spawn_mode` overrides this when set.
+# Swarm-created agents always run in-process without a UI.
 # Env override: JCODE_SWARM_SPAWN_MODE
-swarm_spawn_mode = "inline"
+swarm_spawn_mode = "headless"
 #
 # Max live swarm worker agents in one swarm. This RAM-safety budget applies to
 # recursive ad hoc spawning and deep-mode run_plan parallelism. Completed/stopped
@@ -407,69 +307,6 @@ swarm_max_concurrent_agents = 32
 # memory_embedding_model = "text-embedding-3-small"
 # memory_embedding_base_url = "https://api.openai.com/v1"
 # memory_embedding_dim = 1536
-
-[terminal]
-# Without a hook, clients inside tmux automatically use a right-side pane.
-# Set JCODE_TERMINAL to force a supported terminal emulator instead.
-# External command that takes over headed session spawns (swarm agents,
-# resume-in-new-terminal, self-dev windows, restart restores).
-#
-# When set, jcode runs `<spawn_hook> <jcode-binary> <args...>` instead of
-# opening a terminal emulator itself. The hook receives JCODE_SPAWN_* env vars
-# describing the spawn so multiplexers/wrappers can decide where it appears:
-#   JCODE_SPAWN_KIND        - "swarm-agent", "resume", "selfdev", "restart", ...
-#   JCODE_SPAWN_SESSION_ID  - session the window will run
-#   JCODE_SPAWN_TITLE       - suggested window/tab title
-#   JCODE_SPAWN_CWD         - session working directory (also the hook's cwd)
-#   JCODE_SPAWN_PROGRAM     - jcode binary path
-#   JCODE_SPAWN_COMMAND     - full shell-escaped command line
-#   JCODE_SPAWN_SWARM_ID / JCODE_SPAWN_COORDINATOR_SESSION_ID (swarm spawns)
-# If the hook fails to start, jcode falls back to built-in terminal detection.
-# Env override: JCODE_SPAWN_HOOK (set empty to disable a config hook).
-#
-# Examples:
-#   spawn_hook = "tmux new-window"                # tmux window per agent
-#   spawn_hook = "kitty @ launch --type=tab --"   # kitty tab per agent
-#   spawn_hook = "~/bin/jcode-spawn-router"       # custom placement script
-# spawn_hook = ""
-#
-# External command used to focus/raise an existing session window, replacing
-# the built-in wmctrl/xdotool title search. Receives JCODE_FOCUS_SESSION_ID
-# and JCODE_FOCUS_TITLE env vars. Pair with spawn_hook so the program that
-# placed the window also brings it to the front.
-# Env override: JCODE_FOCUS_HOOK (set empty to disable a config hook).
-#
-# Example:
-#   focus_hook = "~/bin/jcode-focus-router"
-# focus_hook = ""
-#
-# macOS only: terminal that the Cmd+; launch hotkey and in-app session spawns
-# open jcode into. One of: ghostty, iterm2, wezterm, warp, alacritty, vscode,
-# terminal (Apple Terminal). Preferred over the legacy
-# ~/.jcode/preferred_terminal.json file. After changing this, re-run
-# `jcode setup-hotkey` so the generated launcher script (Cmd+;) picks it up.
-# preferred = "ghostty"
-
-[notifications]
-# Desktop notifications for interactive sessions (macOS Notification Center /
-# Linux notify-send). Separate from [safety], which covers ambient-mode
-# ntfy/email/channel notifications.
-#
-# Notify when an agent turn finishes. Fires only for long turns and, by
-# default, only while the terminal window is unfocused. The notification is a
-# compact summary: session name, duration, todo progress, and a snippet of the
-# final assistant message.
-# turn_complete = true
-# Minimum turn duration (seconds) before notifying (default: 120)
-# turn_complete_min_secs = 120
-# Lower threshold (seconds) when the session has todos, since todos indicate
-# task-style work worth reporting sooner (default: 30)
-# turn_complete_todo_min_secs = 30
-# Only notify while the terminal window is unfocused (default: true)
-# turn_complete_only_when_unfocused = true
-# macOS Notification Center sound played on completion (e.g. "Glass", "Ping",
-# "Hero"). Empty string disables the sound. Ignored on non-macOS. (default: "Glass")
-# turn_complete_sound = "Glass"
 
 [hooks]
 # Lifecycle hooks: external commands jcode runs at well-defined points so other
@@ -542,17 +379,6 @@ pause_on_active_session = true
 proactive_work = true
 # Branch prefix for proactive work
 work_branch_prefix = "ambient/"
-# Show ambient cycle in a terminal window (default: true)
-# visible = true
-
-[gateway]
-# Enable WebSocket gateway for iOS/web clients
-enabled = false
-# TCP port for gateway listener
-port = 7643
-# Bind address (0.0.0.0 for LAN/Tailscale reachability)
-bind_addr = "0.0.0.0"
-
 [power]
 # Prevent automatic system sleep while any jcode session is actively working.
 # Linux also blocks lid-switch suspend. Windows still respects explicit lid-close
@@ -568,8 +394,6 @@ prevent_sleep_while_streaming = true
 # ntfy_topic = "jcode-ambient-your-secret-topic"
 # ntfy_server = "https://ntfy.sh"
 
-# Desktop notifications via notify-send (default: true)
-desktop_notifications = true
 
 # Email notifications via SMTP
 # email_enabled = false
@@ -604,8 +428,6 @@ desktop_notifications = true
 # JCODE_JADE_RELAY_USER_ID, JCODE_JADE_RELAY_SESSION_ID.
 # jade_relay_enabled = false
 # jade_relay_reply_enabled = false   # Deliver cloud prompts to one configured live session.
-# jade_relay_launch_enabled = false  # Allow cloud device commands to open headed local sessions.
-# jade_relay_launch_working_dir = "" # Optional default cwd for launched sessions.
 
 # [sponsors] # Legacy config section name retained for compatibility.
 # Tool partner discovery (enabled by default; set enabled = false to opt out).
@@ -618,16 +440,6 @@ desktop_notifications = true
 # enabled = true
 # endpoint = "https://api.jcode.sh/v1/discovery"
 	"#;
-
-        // Substitute platform-specific defaults from the keybinding registry.
-        let p = jcode_config_types::KeybindingPlatform::current();
-        let effort_increase =
-            jcode_config_types::default_binding("effort_increase", p).unwrap_or("alt+right");
-        let effort_decrease =
-            jcode_config_types::default_binding("effort_decrease", p).unwrap_or("alt+left");
-        let default_content = default_content
-            .replace("@EFFORT_INCREASE@", effort_increase)
-            .replace("@EFFORT_DECREASE@", effort_decrease);
 
         std::fs::write(&path, default_content)?;
         Ok(path)

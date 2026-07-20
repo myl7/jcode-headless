@@ -2,7 +2,7 @@
 pub enum LoginProviderAuthKind {
     OAuth,
     ApiKey,
-    DeviceCode,
+    Provisioned,
     Cli,
     Hybrid,
     Local,
@@ -13,7 +13,7 @@ impl LoginProviderAuthKind {
         match self {
             Self::OAuth => "OAuth",
             Self::ApiKey => "API key",
-            Self::DeviceCode => "device code",
+            Self::Provisioned => "provisioned credential",
             Self::Cli => "CLI",
             Self::Hybrid => "API key / CLI",
             Self::Local => "local endpoint",
@@ -59,7 +59,6 @@ pub enum LoginProviderAuthStateKey {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoginProviderSurface {
     CliLogin,
-    TuiLogin,
     ServerBootstrap,
     AutoInit,
     AuthStatus,
@@ -68,7 +67,6 @@ pub enum LoginProviderSurface {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LoginProviderSurfaceOrder {
     pub cli_login: Option<u8>,
-    pub tui_login: Option<u8>,
     pub server_bootstrap: Option<u8>,
     pub auto_init: Option<u8>,
     pub auth_status: Option<u8>,
@@ -77,14 +75,12 @@ pub struct LoginProviderSurfaceOrder {
 impl LoginProviderSurfaceOrder {
     pub const fn new(
         cli_login: Option<u8>,
-        tui_login: Option<u8>,
         server_bootstrap: Option<u8>,
         auto_init: Option<u8>,
         auth_status: Option<u8>,
     ) -> Self {
         Self {
             cli_login,
-            tui_login,
             server_bootstrap,
             auto_init,
             auth_status,
@@ -94,7 +90,6 @@ impl LoginProviderSurfaceOrder {
     pub const fn for_surface(self, surface: LoginProviderSurface) -> Option<u8> {
         match surface {
             LoginProviderSurface::CliLogin => self.cli_login,
-            LoginProviderSurface::TuiLogin => self.tui_login,
             LoginProviderSurface::ServerBootstrap => self.server_bootstrap,
             LoginProviderSurface::AutoInit => self.auto_init,
             LoginProviderSurface::AuthStatus => self.auth_status,
@@ -165,10 +160,6 @@ fn login_providers_for_surface(surface: LoginProviderSurface) -> Vec<LoginProvid
 
 pub fn cli_login_providers() -> Vec<LoginProviderDescriptor> {
     login_providers_for_surface(LoginProviderSurface::CliLogin)
-}
-
-pub fn tui_login_providers() -> Vec<LoginProviderDescriptor> {
-    login_providers_for_surface(LoginProviderSurface::TuiLogin)
 }
 
 pub fn server_bootstrap_login_providers() -> Vec<LoginProviderDescriptor> {
@@ -608,34 +599,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn matrix_tui_login_selection_supports_numbers_and_names() {
-        let providers = tui_login_providers();
-        assert_eq!(
-            resolve_login_selection("1", &providers).map(|provider| provider.id),
-            Some("auto-import")
-        );
-        assert_eq!(
-            resolve_login_selection("2", &providers).map(|provider| provider.id),
-            Some("claude")
-        );
-        // `anthropic-api` sits at 3 (between claude and openai), shifting the
-        // rest of the list down one slot relative to the pre-May-2026 order.
-        assert_eq!(
-            resolve_login_selection("3", &providers).map(|provider| provider.id),
-            Some("anthropic-api")
-        );
-        assert_eq!(
-            resolve_login_selection("7", &providers).map(|provider| provider.id),
-            Some("bedrock")
-        );
-        assert_eq!(
-            resolve_login_selection("compat", &providers).map(|provider| provider.id),
-            Some("openai-compatible")
-        );
-        assert!(resolve_login_selection("google", &providers).is_none());
     }
 
     #[test]

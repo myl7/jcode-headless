@@ -98,7 +98,7 @@ pub(crate) enum Command {
         #[arg(long, hide = true)]
         temp_idle_timeout_secs: Option<u64>,
 
-        /// Stable display name for this server in connected clients and session pickers.
+        /// Stable name used in logs, session metadata, and debug output.
         ///
         /// Useful for long-lived remote runtimes, e.g. `fabian`, `john`, or
         /// `mount-cloud-fabian`. Unsafe characters are normalized before use.
@@ -217,8 +217,7 @@ pub(crate) enum Command {
         coverage_limit: usize,
     },
 
-    /// Diagnose why a provider/model or the model picker is broken by walking the
-    /// strict end-to-end checkpoints (catalog, picker, model-switch, chat, streaming, tools).
+    /// Diagnose provider/model routing through catalog, switching, chat, streaming, and tools.
     #[command(name = "provider-doctor", alias = "provider-strict-e2e")]
     ProviderDoctor {
         /// OpenAI-compatible provider id to diagnose (e.g. cerebras, fpt, nvidia-nim)
@@ -277,7 +276,6 @@ pub(crate) enum Command {
         #[arg(long, requires = "coverage", default_value_t = 50)]
         coverage_limit: usize,
     },
-
 }
 
 #[derive(Subcommand, Debug)]
@@ -467,49 +465,6 @@ pub(crate) enum CloudSessionsCommand {
         #[command(flatten)]
         jade: JadeCloudOptions,
     },
-
-    /// Render a local HTML dashboard of cloud-uploaded sessions from the Jade index
-    Dashboard {
-        /// Maximum number of sessions to include
-        #[arg(long, default_value_t = 100)]
-        limit: usize,
-
-        /// Write the dashboard HTML to this path (default: a temp file)
-        #[arg(long)]
-        output: Option<String>,
-
-        /// Open the generated dashboard in the default browser
-        #[arg(long)]
-        open: bool,
-
-        /// Also download each session and link rows to a local per-session viewer
-        #[arg(long)]
-        with_view: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-
-    /// Download and view a cloud-uploaded session
-    View {
-        /// Session ID to view
-        session_id: String,
-
-        /// Output format
-        #[arg(long, default_value = "summary")]
-        format: CloudSessionViewFormat,
-
-        /// Write HTML output to this path when --format html is used
-        #[arg(long)]
-        output: Option<String>,
-
-        /// Open the generated HTML file when --format html is used
-        #[arg(long)]
-        open: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -529,23 +484,6 @@ pub(crate) struct JadeCloudOptions {
     /// Path to the private Jade session helper. Defaults to $JCODE_JADE_SESSIONS_HELPER or ~/jade/scripts/jade_sessions.py.
     #[arg(long)]
     pub(crate) helper: Option<String>,
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy)]
-pub(crate) enum CloudSessionViewFormat {
-    Summary,
-    Json,
-    Html,
-}
-
-impl CloudSessionViewFormat {
-    pub(crate) fn as_arg(self) -> &'static str {
-        match self {
-            Self::Summary => "summary",
-            Self::Json => "json",
-            Self::Html => "html",
-        }
-    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -668,6 +606,20 @@ pub(crate) enum ProviderCommand {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum AuthCommand {
+    /// Import an already-authenticated subscription credential into JCODE_HOME
+    Import {
+        /// Subscription provider: claude or openai
+        #[arg(id = "auth_import_provider", value_name = "PROVIDER")]
+        provider: String,
+
+        /// Read the authenticated credential JSON from stdin
+        #[arg(long)]
+        stdin: bool,
+
+        /// Emit JSON instead of plain text
+        #[arg(long)]
+        json: bool,
+    },
     /// Show configured authentication status for model/tool providers
     Status {
         /// Emit JSON instead of plain text
@@ -680,7 +632,7 @@ pub(crate) enum AuthCommand {
         #[arg(id = "auth_provider", value_name = "PROVIDER")]
         provider: Option<String>,
 
-        /// Run live post-login validation for configured providers during diagnosis
+        /// Run live credential/runtime validation for configured providers
         #[arg(long)]
         validate: bool,
 

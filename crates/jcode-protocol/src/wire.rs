@@ -185,17 +185,6 @@ pub enum Request {
         message: String,
     },
 
-    /// Inject externally transcribed text into a live TUI session.
-    #[serde(rename = "transcript")]
-    Transcript {
-        id: u64,
-        text: String,
-        #[serde(default)]
-        mode: TranscriptMode,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        session_id: Option<String>,
-    },
-
     /// Execute a shell command from `!cmd` in the active remote session.
     #[serde(rename = "input_shell")]
     InputShell { id: u64, command: String },
@@ -1143,9 +1132,6 @@ pub enum ServerEvent {
         /// Current live processing state for this session, if known.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         activity: Option<SessionActivitySnapshot>,
-        /// Session-scoped side panel pages and active focus state
-        #[serde(default, skip_serializing_if = "snapshot_is_empty")]
-        side_panel: SidePanelSnapshot,
     },
 
     /// Expanded compacted-history window (response to GetCompactedHistory).
@@ -1162,10 +1148,6 @@ pub enum ServerEvent {
         #[serde(default)]
         compacted_hidden_prompts: usize,
     },
-
-    /// Side panel state changed for the active session
-    #[serde(rename = "side_panel_state")]
-    SidePanelState { snapshot: SidePanelSnapshot },
 
     /// Server is reloading (clients should reconnect)
     #[serde(rename = "reloading")]
@@ -1265,10 +1247,6 @@ pub enum ServerEvent {
         /// Human-readable message describing what happened
         message: String,
     },
-
-    /// External transcript text targeted at the active TUI input.
-    #[serde(rename = "transcript")]
-    Transcript { text: String, mode: TranscriptMode },
 
     /// Completed `!cmd` shell execution for a connected remote client.
     #[serde(rename = "input_shell_result")]

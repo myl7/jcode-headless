@@ -1,5 +1,5 @@
 use crate::auth::{AuthRefreshSupport, AuthState, ProviderAuthAssessment};
-use crate::provider_catalog::{LoginProviderAuthKind, LoginProviderDescriptor};
+use crate::provider_catalog::LoginProviderDescriptor;
 
 pub const VALIDATION_STALE_AFTER_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
@@ -116,22 +116,22 @@ pub fn recommended_actions(
     let mut actions = Vec::new();
     match assessment.state {
         AuthState::NotConfigured => actions.push(format!(
-            "Connect it: jcode login --provider {}",
+            "Provision credentials in the writable JCODE_HOME volume for {}.",
             provider.id
         )),
         AuthState::Expired
             if matches!(
                 assessment.refresh_support,
-                AuthRefreshSupport::ManualRelogin
+                AuthRefreshSupport::ManualReplacement
             ) =>
         {
             actions.push(format!(
-                "Re-run login; this provider cannot auto-refresh: jcode login --provider {}",
+                "Replace the mounted credential for {}; this provider cannot auto-refresh.",
                 provider.id
             ));
         }
         AuthState::Expired => actions.push(format!(
-            "Refresh or replace the current login: jcode login --provider {}",
+            "Replace or re-import the current credential for {}.",
             provider.id
         )),
         AuthState::Available => {}
@@ -145,7 +145,7 @@ pub fn recommended_actions(
         let lower = error.to_ascii_lowercase();
         if lower.contains("invalid_grant") || lower.contains("refresh token") {
             actions.push(format!(
-                "Replace the stale OAuth account/token: jcode login --provider {}",
+                "Replace or re-import the stale OAuth account/token for {}.",
                 provider.id
             ));
         } else if lower.contains("rate_limit")
@@ -185,16 +185,6 @@ pub fn recommended_actions(
     if validation_result.is_some_and(|value| value != "validation passed") {
         actions.push(format!(
             "Re-run detailed auth diagnostics: jcode auth-test --provider {}",
-            provider.id
-        ));
-    }
-
-    if matches!(provider.auth_kind, LoginProviderAuthKind::OAuth)
-        || matches!(provider.auth_kind, LoginProviderAuthKind::DeviceCode)
-        || matches!(provider.auth_kind, LoginProviderAuthKind::Hybrid)
-    {
-        actions.push(format!(
-            "For browser/callback issues, use the manual-safe flow: jcode login --provider {} --print-auth-url",
             provider.id
         ));
     }
