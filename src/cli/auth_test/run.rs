@@ -426,7 +426,6 @@ fn print_context_audit_reports(reports: &[AuthTestContextAuditReport]) {
 pub async fn run_auth_test_command(
     choice: &super::provider_init::ProviderChoice,
     model: Option<&str>,
-    login: bool,
     all_configured: bool,
     no_smoke: bool,
     no_tool_smoke: bool,
@@ -445,7 +444,6 @@ pub async fn run_auth_test_command(
                 run_auth_test_target(
                     target,
                     model,
-                    login,
                     !no_smoke,
                     !no_tool_smoke,
                     provider_smoke_prompt,
@@ -454,22 +452,10 @@ pub async fn run_auth_test_command(
                 .await
             }
             ResolvedAuthTestTarget::Generic { provider, choice } => {
-                let mut report = AuthTestProviderReport::new_generic(
+                let report = AuthTestProviderReport::new_generic(
                     choice.as_arg_value().to_string(),
                     generic_credential_paths_for_provider(provider),
                 );
-                if login {
-                    match super::login::run_login(
-                        &choice,
-                        None,
-                        super::login::LoginOptions::default(),
-                    )
-                    .await
-                    {
-                        Ok(()) => report.push_step("login", true, "Login flow completed."),
-                        Err(err) => report.push_step("login", false, err.to_string()),
-                    }
-                }
                 populate_generic_auth_test_report(
                     provider,
                     choice,
@@ -521,7 +507,7 @@ pub(crate) fn resolve_auth_test_targets(
         let targets = configured_auth_test_targets(&status);
         if targets.is_empty() {
             anyhow::bail!(
-                "No configured supported auth providers found. Run `jcode login --provider <provider>` first, or choose an explicit --provider."
+                "No configured supported auth providers found. Mount subscription credentials, set an API key environment variable, or choose an explicit --provider."
             );
         }
         return Ok(targets);
@@ -550,26 +536,12 @@ pub(crate) fn configured_auth_test_targets(
 async fn run_auth_test_target(
     target: AuthTestTarget,
     model: Option<&str>,
-    login: bool,
     run_smoke: bool,
     run_tool_smoke: bool,
     provider_smoke_prompt: &str,
     tool_smoke_prompt: &str,
 ) -> AuthTestProviderReport {
-    let mut report = AuthTestProviderReport::new(target);
-
-    if login {
-        match super::login::run_login(
-            &target.provider_choice(),
-            None,
-            super::login::LoginOptions::default(),
-        )
-        .await
-        {
-            Ok(()) => report.push_step("login", true, "Login flow completed."),
-            Err(err) => report.push_step("login", false, err.to_string()),
-        }
-    }
+    let report = AuthTestProviderReport::new(target);
 
     populate_auth_test_target_report(
         target,

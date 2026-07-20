@@ -2,9 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::process::Command as ProcessCommand;
 
-use crate::{
-    build, logging, perf, server, setup_hints, startup_profile, storage, telemetry, update,
-};
+use crate::{build, logging, perf, server, startup_profile, storage, telemetry, update};
 
 use super::{
     args::{Args, Command},
@@ -79,25 +77,6 @@ pub async fn run() -> Result<()> {
             .collect()
     });
 
-    // Invert the legacy server -> tui dependency: the TUI session picker owns
-    // the session-list cache and registers its invalidator here, so the server
-    // can drop the cache (e.g. after a rename) without referencing tui.
-    crate::session_list_cache::register_invalidator(
-        crate::tui::session_picker::invalidate_session_list_cache,
-    );
-
-    // Invert the legacy tui -> cli dependency for shared-server spawning: the
-    // CLI owns the provider-bootstrap spawn logic and registers it here, so the
-    // TUI reconnect loop can request a replacement server via server_spawn
-    // without referencing cli.
-    crate::server_spawn::register_default_server_spawner(Box::new(|| {
-        Box::pin(async {
-            dispatch::spawn_server(&crate::cli::provider_init::ProviderChoice::Auto, None, None)
-                .await
-        })
-    }));
-
-    crate::tui::keybind::log_keybinding_default_warnings();
     crate::platform::raise_nofile_limit_best_effort(8_192);
     startup_profile::mark("nofile_limit");
 
@@ -214,18 +193,12 @@ fn parse_and_prepare_args() -> Result<Args> {
     let args = Args::parse();
     startup_profile::mark("args_parse");
 
-    if let Some(chord) = args.spawn_hotkey.as_deref() {
-        setup_hints::record_launch_hotkey_use(chord);
-    }
-
     output::set_quiet_enabled(args.quiet);
 
     if let Some(cwd) = &args.cwd {
         std::env::set_current_dir(cwd)?;
         logging::info(&format!("Changed working directory to: {}", cwd));
     }
-
-    validate_remote_working_dir(args.remote_working_dir.as_deref())?;
 
     if args.trace {
         crate::env::set_var("JCODE_TRACE", "1");
@@ -238,27 +211,6 @@ fn parse_and_prepare_args() -> Result<Args> {
     crate::cli::proctitle::set_initial_title(&args);
 
     Ok(args)
-}
-
-fn validate_remote_working_dir(remote_working_dir: Option<&str>) -> Result<()> {
-    if let Some(remote_working_dir) = remote_working_dir
-        && !remote_working_dir_is_absolute(remote_working_dir)
-    {
-        anyhow::bail!("--remote-working-dir must be an absolute path");
-    }
-    Ok(())
-}
-
-fn remote_working_dir_is_absolute(path: &str) -> bool {
-    if path.starts_with('/') || path.starts_with('\\') {
-        return true;
-    }
-
-    let bytes = path.as_bytes();
-    bytes.len() >= 3
-        && bytes[1] == b':'
-        && (bytes[2] == b'/' || bytes[2] == b'\\')
-        && bytes[0].is_ascii_alphabetic()
 }
 
 fn spawn_background_update_check(args: &Args) {
@@ -386,23 +338,9 @@ mod tests {
 
     #[test]
     fn auto_install_respects_explicit_disable_even_without_terminal() {
-        let mut args = parse_args(&["jcode", "login"]);
+        let mut args = parse_args(&["jcode", "version"]);
         args.auto_update = false;
         assert!(!should_auto_install_update(&args));
-    }
-
-    #[test]
-    fn remote_working_dir_validation_requires_absolute_path() {
-        assert!(validate_remote_working_dir(Some("/home/agent/project")).is_ok());
-        assert!(validate_remote_working_dir(Some("C:\\Users\\agent\\project")).is_ok());
-        assert!(validate_remote_working_dir(None).is_ok());
-
-        let error = validate_remote_working_dir(Some("relative/project")).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("--remote-working-dir must be an absolute path")
-        );
     }
 
     #[test]
@@ -413,12 +351,6 @@ mod tests {
         assert!(should_auto_install_update(&args));
     }
 
-    #[test]
-    fn hidden_spawn_hotkey_argument_is_global_and_preserves_canonical_text() {
-        let args = parse_args(&["jcode", "--spawn-hotkey", "shift+cmd+'", "self-dev"]);
-        assert_eq!(args.spawn_hotkey.as_deref(), Some("shift+cmd+'"));
-        assert!(matches!(args.command, Some(Command::SelfDev { .. })));
-    }
     #[test]
     fn external_provider_runtimes_register_and_instantiate() {
         register_external_provider_runtimes();

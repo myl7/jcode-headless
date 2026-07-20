@@ -3,19 +3,14 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::io::{Read, Write};
-use std::net::ToSocketAddrs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 
-use crate::{browser, gateway, memory, session, storage, tui};
+use crate::{memory, session, storage};
 
-use super::terminal::init_tui_runtime;
-
-mod menubar;
 mod provider_setup;
 mod report_info;
-mod restart;
 
 pub(crate) use super::auth_test::run_post_login_validation;
 #[cfg(test)]
@@ -26,19 +21,13 @@ pub(crate) use super::auth_test::{
 pub use super::auth_test::{
     run_auth_test_command, run_auth_test_context_audit_command, run_auth_test_coverage_command,
 };
-pub use menubar::{ensure_menubar_helper_running, run_menubar_command};
 pub(crate) use provider_setup::{ProviderAddOptions, run_provider_add_command};
-pub use restart::{
-    maybe_run_pending_restart_restore_on_startup, run_restart_clear_command,
-    run_restart_restore_command, run_restart_save_command, run_restart_status_command,
-};
 
 pub enum AmbientSubcommand {
     Status,
     Log,
     Trigger,
     Stop,
-    RunVisible,
 }
 
 pub enum CloudSubcommand {
@@ -1399,61 +1388,14 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 pub async fn run_ambient_command(cmd: AmbientSubcommand) -> Result<()> {
-    if let AmbientSubcommand::RunVisible = cmd {
-        return run_ambient_visible().await;
-    }
-
     let debug_cmd = match cmd {
         AmbientSubcommand::Status => "ambient:status",
         AmbientSubcommand::Log => "ambient:log",
         AmbientSubcommand::Trigger => "ambient:trigger",
         AmbientSubcommand::Stop => "ambient:stop",
-        AmbientSubcommand::RunVisible => unreachable!(),
     };
 
     super::debug::run_debug_command(debug_cmd, "", None, None, false).await
-}
-
-pub async fn run_transcript_command(
-    text: Option<String>,
-    mode: crate::protocol::TranscriptMode,
-    session: Option<String>,
-) -> Result<()> {
-    let text = if let Some(text) = text {
-        text
-    } else {
-        let mut stdin = String::new();
-        std::io::stdin().read_to_string(&mut stdin)?;
-        let trimmed = stdin.trim_end_matches(['\r', '\n']);
-        if trimmed.is_empty() {
-            anyhow::bail!("Provide transcript text as an argument or pipe it via stdin")
-        }
-        trimmed.to_string()
-    };
-
-    let mut client = crate::server::Client::connect_debug().await?;
-    let request_id = client.send_transcript(&text, mode, session).await?;
-
-    loop {
-        match client.read_event().await? {
-            crate::protocol::ServerEvent::Ack { id } if id == request_id => {}
-            crate::protocol::ServerEvent::Done { id } if id == request_id => return Ok(()),
-            crate::protocol::ServerEvent::Error { id, message, .. } if id == request_id => {
-                anyhow::bail!(message)
-            }
-            _ => {}
-        }
-    }
-}
-
-pub async fn run_dictate_command(type_output: bool) -> Result<()> {
-    let run = crate::dictation::run_configured().await?;
-
-    if type_output {
-        crate::dictation::type_text(&run.text)
-    } else {
-        run_transcript_command(Some(run.text), run.mode, None).await
-    }
 }
 
 #[derive(Serialize)]
@@ -1483,7 +1425,7 @@ pub fn run_session_rename_command(
     }
 
     session.save()?;
-    crate::tui::session_picker::invalidate_session_list_cache();
+    crate::session_list_cache::invalidate();
 
     let output = SessionRenameOutput {
         session_id: session.id.clone(),
@@ -1506,51 +1448,6 @@ pub fn run_session_rename_command(
         );
     }
 
-    Ok(())
-}
-
-async fn run_ambient_visible() -> Result<()> {
-    use crate::ambient::VisibleCycleContext;
-
-    let context = VisibleCycleContext::load().map_err(|e| {
-        anyhow::anyhow!(
-            "Failed to load visible cycle context: {}\nIs the ambient runner running?",
-            e
-        )
-    })?;
-
-    let (provider, registry) = super::provider_init::init_provider_and_registry(
-        &super::provider_init::ProviderChoice::Auto,
-        None,
-    )
-    .await?;
-
-    registry.register_ambient_tools().await;
-
-    let safety = std::sync::Arc::new(crate::safety::SafetySystem::new());
-    crate::tool::ambient::init_safety_system(safety);
-
-    let (terminal, tui_runtime) = init_tui_runtime()?;
-
-    let mut app = tui::App::new(provider, registry);
-    app.set_ambient_mode(context.system_prompt, context.initial_message);
-
-    let _ = crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::SetTitle("🤖 jcode ambient cycle")
-    );
-
-    let result = app.run(terminal).await;
-
-    tui_runtime.finish(true);
-
-    if let Some(cycle_result) = crate::tool::ambient::take_cycle_result() {
-        let result_path = VisibleCycleContext::result_path()?;
-        crate::storage::write_json(&result_path, &cycle_result)?;
-        eprintln!("Ambient cycle result saved.");
-    }
-
-    result?;
     Ok(())
 }
 
@@ -1805,218 +1702,6 @@ pub fn run_memory_command(cmd: MemorySubcommand) -> Result<()> {
     Ok(())
 }
 
-pub fn run_pair_command(list: bool, revoke: Option<String>) -> Result<()> {
-    let mut registry = gateway::DeviceRegistry::load();
-
-    if list {
-        if registry.devices.is_empty() {
-            eprintln!("No paired devices.");
-        } else {
-            eprintln!("\x1b[1mPaired devices:\x1b[0m\n");
-            for device in &registry.devices {
-                let last_seen = &device.last_seen;
-                eprintln!("  \x1b[36m{}\x1b[0m  ({})", device.name, device.id);
-                eprintln!("    Paired: {}  Last seen: {}", device.paired_at, last_seen);
-                if let Some(ref apns) = device.apns_token {
-                    eprintln!("    APNs: {}...", &apns[..apns.len().min(16)]);
-                }
-                eprintln!();
-            }
-        }
-        return Ok(());
-    }
-
-    if let Some(ref target) = revoke {
-        let before = registry.devices.len();
-        registry
-            .devices
-            .retain(|d| d.id != *target && d.name != *target);
-        if registry.devices.len() < before {
-            registry.save()?;
-            eprintln!("\x1b[32m✓\x1b[0m Revoked device: {}", target);
-        } else {
-            eprintln!("\x1b[31m✗\x1b[0m No device found matching: {}", target);
-        }
-        return Ok(());
-    }
-
-    let gw_config = &crate::config::config().gateway;
-
-    if !gw_config.enabled {
-        eprintln!("\x1b[33m⚠\x1b[0m  Gateway is disabled. Enable it in ~/.jcode/config.toml:\n");
-        eprintln!("    \x1b[2m[gateway]\x1b[0m");
-        eprintln!("    \x1b[2menabled = true\x1b[0m");
-        eprintln!("    \x1b[2mport = {}\x1b[0m\n", gw_config.port);
-        eprintln!("  Then restart the jcode server.\n");
-    }
-
-    let code = registry.generate_pairing_code();
-    let connect_host = resolve_connect_host(&gw_config.bind_addr);
-    let pair_uri = format!(
-        "jcode://pair?host={}&port={}&code={}",
-        connect_host, gw_config.port, code
-    );
-
-    eprintln!();
-    eprintln!("  \x1b[1mScan with the jcode iOS app:\x1b[0m\n");
-    match crate::login_qr::render_unicode_qr(&pair_uri) {
-        Ok(qr) => {
-            for line in qr.lines() {
-                eprintln!("  {line}");
-            }
-        }
-        Err(_) => eprintln!("  \x1b[33m(QR code generation failed)\x1b[0m"),
-    }
-    eprintln!();
-    eprintln!(
-        "  Pairing code:  \x1b[1;37m{} {}\x1b[0m   \x1b[2m(expires in 5 minutes)\x1b[0m",
-        &code[..3],
-        &code[3..]
-    );
-    let resolved_hint = format!("{}:{}", connect_host, gw_config.port);
-    let bind_hint = format!("{}:{}", gw_config.bind_addr, gw_config.port);
-    eprintln!("  Connect host:  \x1b[36m{}\x1b[0m", resolved_hint);
-    if connect_host != gw_config.bind_addr {
-        eprintln!("  Bind address:  \x1b[2m{}\x1b[0m", bind_hint);
-    }
-
-    if connect_host == "<your-mac-hostname>" {
-        eprintln!(
-            "\n  \x1b[33mTip:\x1b[0m set JCODE_GATEWAY_HOST to your reachable Tailscale hostname."
-        );
-    }
-
-    if (gw_config.bind_addr.as_str(), gw_config.port)
-        .to_socket_addrs()
-        .ok()
-        .and_then(|mut it| it.next())
-        .is_none()
-    {
-        eprintln!(
-            "  \x1b[33mWarning:\x1b[0m gateway bind address appears invalid: {}",
-            bind_hint
-        );
-    }
-    eprintln!();
-
-    Ok(())
-}
-
-pub fn resolve_connect_host(bind_addr: &str) -> String {
-    if bind_addr == "0.0.0.0" || bind_addr == "::" {
-        if let Some(host) = std::env::var("JCODE_GATEWAY_HOST")
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-        {
-            return host;
-        }
-
-        if let Some(host) = detect_tailscale_dns_name() {
-            return host;
-        }
-
-        return std::env::var("HOSTNAME")
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "<your-mac-hostname>".to_string());
-    }
-    bind_addr.to_string()
-}
-
-pub fn parse_tailscale_dns_name(status_json: &[u8]) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_slice(status_json).ok()?;
-    let dns_name = value
-        .get("Self")?
-        .get("DNSName")?
-        .as_str()?
-        .trim()
-        .trim_end_matches('.')
-        .to_string();
-
-    if dns_name.is_empty() {
-        None
-    } else {
-        Some(dns_name)
-    }
-}
-
-pub fn detect_tailscale_dns_name() -> Option<String> {
-    let output = std::process::Command::new("tailscale")
-        .args(["status", "--json"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    parse_tailscale_dns_name(&output.stdout)
-}
-
-pub async fn run_browser(action: &str) -> Result<()> {
-    match action {
-        "setup" => browser::run_setup_command().await?,
-        "status" => {
-            let status = browser::ensure_browser_ready_noninteractive().await?;
-            println!("Browser automation");
-            println!("  backend: {}", status.backend);
-            println!("  browser: {}", status.browser);
-            println!(
-                "  binary: {}",
-                if status.binary_installed {
-                    "installed"
-                } else {
-                    "missing"
-                }
-            );
-            println!(
-                "  setup: {}",
-                if status.setup_complete {
-                    "complete"
-                } else {
-                    "not complete"
-                }
-            );
-            println!(
-                "  bridge: {}",
-                if status.responding {
-                    "responding"
-                } else {
-                    "not responding"
-                }
-            );
-            println!(
-                "  compatibility: {}",
-                if status.compatible {
-                    "ok"
-                } else {
-                    "extension/bridge mismatch"
-                }
-            );
-            if !status.missing_actions.is_empty() {
-                println!("  missing actions: {}", status.missing_actions.join(", "));
-            }
-
-            if status.ready {
-                println!("\nBuilt-in browser tool is ready.");
-            } else if status.responding && !status.compatible {
-                println!(
-                    "\nThe browser bridge is connected, but the installed Firefox extension is out of date for this jcode build. Run `jcode browser setup` to repair or update it."
-                );
-            } else {
-                println!("\nRun `jcode browser setup` to install or repair it.");
-            }
-        }
-        other => {
-            eprintln!("Unknown browser action: {}", other);
-            eprintln!("Available: setup, status");
-            std::process::exit(1);
-        }
-    }
-    Ok(())
-}
 
 #[derive(Debug, Serialize)]
 struct ModelListReport {

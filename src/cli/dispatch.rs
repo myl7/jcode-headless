@@ -1,23 +1,19 @@
 #![cfg_attr(test, allow(clippy::await_holding_lock))]
 
 use anyhow::Result;
+use clap::CommandFactory;
 use std::io::IsTerminal;
 use std::process::{Command as ProcessCommand, Stdio};
 use std::time::Instant;
 
 use super::args::{
     AmbientCommand, Args, AuthCommand, CloudCommand, CloudSessionsCommand, Command, MemoryCommand,
-    ModelCommand, ProviderCommand, RestartCommand, ServerCommand, SessionCommand,
-    TranscriptModeArg,
+    ModelCommand, ProviderCommand, ServerCommand, SessionCommand,
 };
-use crate::{
-    agent, auth, build, provider, provider_catalog, server, session, setup_hints, startup_profile,
-    tui,
-};
+use crate::{provider_catalog, server, session, startup_profile};
 
 use super::{
-    account, acp, commands, debug, hot_exec, login, output, provider_init, selfdev, terminal,
-    tui_launch,
+    acp, commands, debug, hot_exec, output, provider_init,
 };
 use provider_init::ProviderChoice;
 
@@ -148,9 +144,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
             )
             .await?;
         }
-        Some(Command::Connect) => {
-            tui_launch::run_client().await?;
-        }
         Some(Command::Server { action }) => match action {
             ServerCommand::Start { json } => {
                 spawn_server(
@@ -200,63 +193,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
             )
             .await?;
         }
-        Some(Command::Login {
-            provider: login_provider,
-            account,
-            no_browser,
-            print_auth_url,
-            callback_url,
-            auth_code,
-            json,
-            complete,
-            no_validate,
-            google_access_tier,
-            api_base,
-            api_key,
-            api_key_env,
-        }) => {
-            login::run_login(
-                &login_provider.unwrap_or(args.provider),
-                account.as_deref(),
-                login::LoginOptions {
-                    no_browser,
-                    print_auth_url,
-                    callback_url,
-                    auth_code,
-                    json,
-                    complete,
-                    no_validate,
-                    google_access_tier: google_access_tier.map(|tier| match tier {
-                        super::args::GoogleAccessTierArg::Full => {
-                            auth::google::GmailAccessTier::Full
-                        }
-                        super::args::GoogleAccessTierArg::Readonly => {
-                            auth::google::GmailAccessTier::ReadOnly
-                        }
-                    }),
-                    openai_compatible_api_base: api_base,
-                    openai_compatible_api_key: api_key,
-                    openai_compatible_api_key_env: api_key_env,
-                    openai_compatible_default_model: args.model.clone(),
-                },
-            )
-            .await?;
-        }
-        Some(Command::Account { action }) => match action {
-            super::args::AccountCommand::Login { no_browser } => {
-                account::run_login(no_browser).await?
-            }
-            super::args::AccountCommand::Status { json } => account::run_status(json).await?,
-            super::args::AccountCommand::Manage => account::run_manage()?,
-            super::args::AccountCommand::Logout => account::run_logout().await?,
-        },
-        Some(Command::Repl) => {
-            let (provider, registry) =
-                provider_init::init_provider_and_registry(&args.provider, args.model.as_deref())
-                    .await?;
-            let mut agent = agent::Agent::new(provider, registry);
-            agent.repl().await?;
-        }
         Some(Command::Update) => {
             hot_exec::run_update()?;
         }
@@ -265,9 +201,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
         }
         Some(Command::Usage { json }) => {
             commands::run_usage_command(json).await?;
-        }
-        Some(Command::SelfDev { build }) => {
-            selfdev::run_self_dev(build, args.resume).await?;
         }
         Some(Command::Debug {
             command,
@@ -352,77 +285,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
         Some(Command::Cloud(subcmd)) => {
             commands::run_cloud_command(map_cloud_subcommand(subcmd))?;
         }
-        Some(Command::Pair { list, revoke }) => {
-            commands::run_pair_command(list, revoke)?;
-        }
-        Some(Command::Permissions) => {
-            tui::permissions::run_permissions()?;
-        }
-        Some(Command::Transcript {
-            text,
-            mode,
-            session,
-        }) => {
-            commands::run_transcript_command(text, map_transcript_mode(mode), session).await?;
-        }
-        Some(Command::Dictate { r#type }) => {
-            commands::run_dictate_command(r#type).await?;
-        }
-        Some(Command::SetupHotkey {
-            listen_macos_hotkey,
-            notify_cli_launch,
-            listen_windows_hotkey,
-            uninstall,
-        }) => {
-            setup_hints::run_setup_hotkey(
-                listen_macos_hotkey,
-                listen_windows_hotkey,
-                uninstall,
-                notify_cli_launch.as_deref(),
-            )?;
-        }
-        Some(Command::SetupLauncher) => {
-            setup_hints::run_setup_launcher()?;
-        }
-        Some(Command::Browser { action }) => {
-            commands::run_browser(&action).await?;
-        }
-        Some(Command::Replay {
-            session,
-            swarm,
-            export,
-            speed,
-            timeline,
-            auto_edit,
-            video,
-            cols,
-            rows,
-            fps,
-            centered,
-            no_centered,
-        }) => {
-            let centered_override = if centered {
-                Some(true)
-            } else if no_centered {
-                Some(false)
-            } else {
-                None
-            };
-            tui_launch::run_replay_command(
-                &session,
-                swarm,
-                export,
-                auto_edit,
-                speed,
-                timeline.as_deref(),
-                video.as_deref(),
-                cols,
-                rows,
-                fps,
-                centered_override,
-            )
-            .await?;
-        }
         Some(Command::Model(subcmd)) => match subcmd {
             ModelCommand::List { json, verbose } => {
                 commands::run_model_command(&args.provider, args.model.as_deref(), json, verbose)
@@ -476,7 +338,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
             .await?;
         }
         Some(Command::AuthTest {
-            login,
             all_configured,
             no_smoke,
             no_tool_smoke,
@@ -507,7 +368,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
                 commands::run_auth_test_command(
                     &args.provider,
                     args.model.as_deref(),
-                    login,
                     all_configured,
                     no_smoke,
                     no_tool_smoke,
@@ -517,17 +377,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
                 )
                 .await?;
             }
-        }
-        Some(Command::Restart { action }) => match action {
-            RestartCommand::Save { auto_restore } => {
-                commands::run_restart_save_command(auto_restore).await?
-            }
-            RestartCommand::Restore => commands::run_restart_restore_command()?,
-            RestartCommand::Status => commands::run_restart_status_command()?,
-            RestartCommand::Clear => commands::run_restart_clear_command()?,
-        },
-        Some(Command::Menubar { once, json }) => {
-            commands::run_menubar_command(once, json)?;
         }
         None => run_default_command(args).await?,
     }
@@ -550,10 +399,6 @@ fn auth_doctor_provider_arg<'a>(
 
 fn resolve_resume_arg(args: &mut Args) -> Result<()> {
     if let Some(ref resume_id) = args.resume {
-        if resume_id.is_empty() {
-            return tui_launch::list_sessions();
-        }
-
         let resume_id = resume_id.clone();
         match resolve_resume_id(&resume_id) {
             Ok(full_id) => {
@@ -658,7 +503,6 @@ fn map_ambient_subcommand(subcmd: AmbientCommand) -> commands::AmbientSubcommand
         AmbientCommand::Log => commands::AmbientSubcommand::Log,
         AmbientCommand::Trigger => commands::AmbientSubcommand::Trigger,
         AmbientCommand::Stop => commands::AmbientSubcommand::Stop,
-        AmbientCommand::RunVisible => commands::AmbientSubcommand::RunVisible,
     }
 }
 
@@ -796,172 +640,12 @@ fn map_cloud_sessions_subcommand(
     }
 }
 
-fn map_transcript_mode(mode: TranscriptModeArg) -> crate::protocol::TranscriptMode {
-    match mode {
-        TranscriptModeArg::Insert => crate::protocol::TranscriptMode::Insert,
-        TranscriptModeArg::Append => crate::protocol::TranscriptMode::Append,
-        TranscriptModeArg::Replace => crate::protocol::TranscriptMode::Replace,
-        TranscriptModeArg::Send => crate::protocol::TranscriptMode::Send,
-    }
-}
-
 async fn run_default_command(args: Args) -> Result<()> {
-    startup_profile::mark("run_main_none_branch");
-
-    let explicit_provider_or_model = args.provider != ProviderChoice::Auto
-        || args.model.is_some()
-        || args.provider_profile.is_some();
-    let explicit_tool_options = args.tool_profile.is_some()
-        || args.tools.is_some()
-        || args.disabled_tools.is_some()
-        || args.disable_base_tools;
-    if args.resume.is_none()
-        && !explicit_provider_or_model
-        && !explicit_tool_options
-        && commands::maybe_run_pending_restart_restore_on_startup().await?
-    {
-        return Ok(());
-    }
-
-    let startup_hints = if args.fresh_spawn {
-        None
-    } else {
-        // One-time: bake per-repo launch hotkeys from session history into config,
-        // then reinstall so the new chords take effect. Scanning session history
-        // can take a few hundred ms, so run it on a detached thread to keep it off
-        // the first-frame critical path. It is gated by an `imported` flag, so it
-        // does real work at most once and no-ops on every later launch.
-        if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-            std::thread::Builder::new()
-                .name("launch-hotkey-bake".to_string())
-                .spawn(|| {
-                    if crate::config::Config::bake_launch_hotkeys_once() {
-                        setup_hints::reinstall_launch_hotkeys_after_config_change();
-                    }
-                })
-                .ok();
-        }
-
-        // Prefer existing setup hints (alignment/welcome/terminal nudges); only
-        // surface the keybinding-conflict heads-up when nothing else is queued,
-        // so we never clobber an early-launch tip. The conflict hint is
-        // self-debouncing (shown once per distinct conflict set).
-        setup_hints::maybe_show_setup_hints()
-            .or_else(|| {
-                setup_hints::maybe_show_keymap_conflict_hint(&crate::config::config().keybindings)
-            })
-            .or_else(setup_hints::maybe_show_glyph_safe_notice)
-    };
-    startup_profile::mark("setup_hints");
-
-    // Best-effort: make sure the macOS menu bar session-count indicator is
-    // running so it shows up automatically for every macOS user.
-    commands::ensure_menubar_helper_running();
-
-    if args.resume.is_none() {
-        terminal::show_crash_resume_hint();
-    }
-    startup_profile::mark("crash_resume_hint");
-
-    let cwd = std::env::current_dir()?;
-    let in_jcode_repo = build::is_jcode_repo(&cwd);
-    startup_profile::mark("is_jcode_repo");
-    let already_in_selfdev = crate::cli::selfdev::client_selfdev_requested();
-
-    // Record where this interactive launch happened so the system-wide launch
-    // hotkeys can reopen jcode in the last project directory (Cmd+') and the
-    // last jcode repo for self-dev (Cmd+Shift+'). Best-effort; ignored unless a
-    // real TTY and not a fresh-spawn re-entry.
-    if !args.fresh_spawn && std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-        let repo_dir = build::get_repo_dir();
-        setup_hints::record_launch_dirs(&cwd, repo_dir.as_deref());
-    }
-
-    if in_jcode_repo && !already_in_selfdev && !args.no_selfdev {
-        output::stderr_info("📍 Detected jcode repository - enabling self-dev mode");
-        output::stderr_info("   Using shared server with self-dev session mode");
-        output::stderr_info("   (use --no-selfdev to disable auto-detection)");
-        output::stderr_blank_line();
-
-        crate::env::set_var(selfdev::CLIENT_SELFDEV_ENV, "1");
-        crate::cli::proctitle::set_initial_title(&args);
-    }
-
-    startup_profile::mark("client_mode_start");
-    let mut server_running = if args.fresh_spawn {
-        true
-    } else {
-        server_is_running().await
-    };
-    startup_profile::mark("server_check");
-
-    if !server_running {
-        server_running = wait_for_existing_reload_server("client startup").await;
-    }
-
-    if !server_running && std::env::var("JCODE_RESUMING").is_ok() {
-        server_running = wait_for_resuming_server(
-            "client startup without reload marker",
-            std::time::Duration::from_secs(5),
-        )
-        .await;
-    }
-
-    if server_running && explicit_provider_or_model {
-        output::stderr_info(
-            "Server already running; provider/model flags only apply when starting a new server.",
-        );
-        output::stderr_info(format!(
-            "Current server settings control `/model`. Restart server to apply: --provider {}{}",
-            args.provider.as_arg_value(),
-            args.model
-                .as_ref()
-                .map(|m| format!(" --model {}", m))
-                .unwrap_or_default()
-        ));
-    }
-
-    if server_running && explicit_tool_options {
-        output::stderr_info(
-            "Server already running; tool flags only apply when starting a new server. Restart server or edit [tools] in config.toml to change the active toolset.",
-        );
-    }
-
-    if !server_running {
-        // No live server and no in-flight reload/resume. If a dead socket was
-        // left behind by a crashed or upgraded daemon, reap it now so the spawn
-        // below binds cleanly instead of wedging the client in a connect-retry
-        // loop against a stale socket (issues #277/#291). This only removes a
-        // socket that has no live listener AND whose daemon lock is free, so it
-        // can never disturb a running server.
-        if server::reap_stale_socket_if_dead(&server::socket_path()).await {
-            output::stderr_info("Removed a stale jcode socket from a previous server.");
-        }
-
-        maybe_prompt_server_bootstrap_login(&args.provider).await?;
-        spawn_server(
-            &args.provider,
-            args.model.as_deref(),
-            args.provider_profile.as_deref(),
-        )
-        .await?;
-    }
-
-    startup_profile::mark("pre_tui_client");
-    if std::env::var("JCODE_RESUMING").is_err() && server_running {
-        output::stderr_info("Connecting to server...");
-    }
-    tui_launch::run_tui_client(
-        args.resume,
-        startup_hints,
-        !server_running,
-        args.fresh_spawn,
-        args.remote_working_dir,
-        args.onboarding_sim,
-    )
-    .await?;
-
-    Ok(())
+    let _ = args;
+    let mut command = Args::command();
+    command.print_help()?;
+    println!();
+    anyhow::bail!("a command is required in headless mode")
 }
 
 fn print_provider_test_coverage_report(report: &str, colorize: bool) {
@@ -1138,86 +822,6 @@ async fn acquire_spawn_lock_or_wait(
     }
 }
 
-pub(crate) async fn maybe_prompt_server_bootstrap_login(
-    provider_choice: &ProviderChoice,
-) -> Result<()> {
-    startup_profile::mark("cred_check_start");
-
-    // Normal interactive launches perform onboarding inside the TUI, and an
-    // explicit provider choice never needs auto-detection here. Avoid probing
-    // every credential backend unless the caller explicitly opted into the
-    // legacy headless CLI bootstrap flow. On Windows those reads may trigger
-    // expensive security-product inspection even when credentials are already
-    // configured, delaying every cold launch before the server is spawned.
-    let cli_bootstrap_requested = std::env::var_os("JCODE_CLI_BOOTSTRAP_LOGIN").is_some();
-    if !should_detect_cli_bootstrap_credentials(provider_choice, cli_bootstrap_requested) {
-        startup_profile::mark("cred_check_done");
-        return Ok(());
-    }
-
-    let cred_state = detect_bootstrap_credentials().await;
-    startup_profile::mark("cred_check_done");
-
-    // Onboarding now happens entirely inside the TUI. We deliberately do *not*
-    // run the blocking CLI "Approve sources" import prompt or the
-    // "Choose a provider" selection menu here: a brand-new user launches
-    // straight into the TUI, which detects the missing credentials and walks
-    // them through login / external-auth import / model selection in the guided
-    // first-run flow. The server is happy to spawn unauthenticated and the TUI
-    // drives `/login` from there.
-    //
-    // The only thing left to honor at the CLI layer is an explicit headless
-    // bootstrap (e.g. CI / non-interactive provisioning), which opts in via the
-    // `JCODE_CLI_BOOTSTRAP_LOGIN` env var.
-    if cred_state.has_any {
-        return Ok(());
-    }
-
-    if auth::AuthStatus::has_any_untrusted_external_auth() {
-        let _ = provider_init::maybe_run_external_auth_auto_import_flow().await?;
-        if detect_bootstrap_credentials().await.has_any {
-            return Ok(());
-        }
-    }
-
-    let provider = provider_init::prompt_login_provider_selection(
-        &provider_catalog::server_bootstrap_login_providers(),
-        "No credentials found. Let's log in!\n\nChoose a provider:",
-    )?;
-    login::run_login_provider(provider, None, login::LoginOptions::default()).await?;
-    provider_init::apply_login_provider_profile_env(provider);
-    output::stderr_blank_line();
-
-    Ok(())
-}
-
-fn should_detect_cli_bootstrap_credentials(
-    provider_choice: &ProviderChoice,
-    cli_bootstrap_requested: bool,
-) -> bool {
-    cli_bootstrap_requested && *provider_choice == ProviderChoice::Auto
-}
-
-struct BootstrapCredentialState {
-    has_any: bool,
-}
-
-async fn detect_bootstrap_credentials() -> BootstrapCredentialState {
-    let (has_claude, has_openai) = tokio::join!(
-        tokio::task::spawn_blocking(|| auth::claude::load_credentials().is_ok()),
-        tokio::task::spawn_blocking(|| auth::codex::load_credentials().is_ok()),
-    );
-    let has_claude = has_claude.unwrap_or(false);
-    let has_openai = has_openai.unwrap_or(false);
-    let has_openrouter = provider::openrouter::has_credentials();
-    let has_copilot = auth::copilot::has_copilot_credentials();
-    let has_api_key = std::env::var("ANTHROPIC_API_KEY").is_ok();
-
-    BootstrapCredentialState {
-        has_any: has_claude || has_openai || has_openrouter || has_copilot || has_api_key,
-    }
-}
-
 pub(crate) async fn spawn_server(
     provider_choice: &ProviderChoice,
     model: Option<&str>,
@@ -1249,22 +853,11 @@ pub(crate) async fn spawn_server(
 
     startup_profile::mark("server_spawn_start");
     output::stderr_info("Starting server...");
-    let client_requested_selfdev = selfdev::client_selfdev_requested();
-    let exe = build::shared_server_update_candidate(client_requested_selfdev)
-        .map(|(path, _)| path)
-        .or_else(|| std::env::current_exe().ok())
+    let exe = std::env::current_exe()
+        .ok()
         .ok_or_else(|| anyhow::anyhow!("Could not determine executable path for server spawn"))?;
     let mut cmd = ProcessCommand::new(&exe);
-    cmd.env_remove(selfdev::CLIENT_SELFDEV_ENV);
-    if client_requested_selfdev {
-        cmd.env("JCODE_DEBUG_CONTROL", "1");
-    }
     cmd.arg("--provider").arg(provider_choice.as_arg_value());
-    // The interactive TUI owns first-run onboarding/login. Let the spawned
-    // server boot with a deferred (credential-less) provider when nothing is
-    // configured yet, instead of bailing; the TUI activates a provider via the
-    // in-TUI `/login` flow. See init_provider_with_options.
-    cmd.env("JCODE_DEFERRED_AUTH_BOOTSTRAP", "1");
     if let Some(provider_profile) = provider_profile {
         cmd.arg("--provider-profile").arg(provider_profile);
     }
