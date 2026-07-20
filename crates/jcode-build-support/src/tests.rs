@@ -530,19 +530,19 @@ fn advance_shared_server_preserves_pinned_selfdev_build() {
         assert_eq!(
             read_shared_server_version().unwrap().as_deref(),
             Some(selfdev),
-            "self-dev shared-server build must be preserved across update"
+            "self-dev shared-server build must be preserved across stable installs"
         );
     });
 }
 
-/// Simulate the channel mutations performed by `/update`'s stable install path
-/// (`download_and_install_blocking_with_progress`), without doing any network
-/// I/O. This is the exact sequence: advance shared-server if tracking stable,
-/// then move stable/current/launcher to the freshly installed version.
-fn simulate_stable_update_channel_swap(new_version: &str) {
+/// Simulate the channel mutations performed by an external stable install,
+/// without doing any network I/O. This is the exact sequence: advance
+/// shared-server if tracking stable, then move stable/current/launcher to the
+/// freshly installed version.
+fn simulate_stable_install_channel_swap(new_version: &str) {
     install_binary_at_version(std::env::current_exe().as_ref().unwrap(), new_version)
         .expect("install update version");
-    // /update tries to carry the daemon's reload target forward, but only when
+    // A stable install carries the daemon's reload target forward only when
     // shared-server is tracking stable.
     advance_shared_server_if_tracking_stable(new_version).expect("advance shared-server");
     update_stable_symlink(new_version).expect("update stable");
@@ -564,21 +564,21 @@ fn daemon_reload_target_version() -> Option<String> {
         .map(|name| name.to_string_lossy().into_owned())
 }
 
-/// Reproduces the user-reported "/update gives the new client but a stale
-/// server" bug.
+/// Reproduces a stable install that gives the new client but leaves a stale
+/// server reload target.
 ///
 /// Repro setup matches a real self-dev machine state observed in the field:
 /// the `shared-server` channel is pinned to a self-dev build that differs from
-/// `stable`. When the user runs `/update`, the client channels advance to the
-/// new release, but `advance_shared_server_if_tracking_stable` refuses to move
+/// `stable`. When an external install replaces the release, the client channels
+/// advance, but `advance_shared_server_if_tracking_stable` refuses to move
 /// the pinned shared-server channel, so the daemon's reload target stays on the
 /// old self-dev binary forever.
 ///
-/// EXPECTED (post-fix): after `/update`, the daemon's reload target resolves to
+/// EXPECTED (post-fix): after installation, the daemon's reload target resolves to
 /// the freshly installed release version, so a reconnecting client can upgrade
 /// the server too.
 #[test]
-fn update_leaves_daemon_reload_target_stale_when_shared_server_pinned_to_selfdev() {
+fn stable_install_refreshes_daemon_reload_target_when_shared_server_pinned_to_selfdev() {
     with_temp_jcode_home(|| {
         // Field state: client + server both on an old self-dev build.
         let old_selfdev = "3f160da1-dirty-e756d52efca9";
@@ -592,20 +592,20 @@ fn update_leaves_daemon_reload_target_stale_when_shared_server_pinned_to_selfdev
         update_current_symlink(old_selfdev).expect("current selfdev");
         update_shared_server_symlink(old_selfdev).expect("shared-server selfdev");
 
-        // User runs `/update`: a newer release ships and the client installs it.
+        // A newer release is installed externally.
         let new_release = "0.15.0";
-        simulate_stable_update_channel_swap(new_release);
+        simulate_stable_install_channel_swap(new_release);
 
         // Client side is upgraded: current + stable now point at the release.
         assert_eq!(
             read_current_version().unwrap().as_deref(),
             Some(new_release),
-            "client `current` channel should advance on /update"
+            "client `current` channel should advance after installation"
         );
         assert_eq!(
             read_stable_version().unwrap().as_deref(),
             Some(new_release),
-            "client `stable` channel should advance on /update"
+            "client `stable` channel should advance after installation"
         );
 
         // Server side: what would the daemon reload into? This is the bug.
@@ -613,7 +613,7 @@ fn update_leaves_daemon_reload_target_stale_when_shared_server_pinned_to_selfdev
         assert_eq!(
             target.as_deref(),
             Some(new_release),
-            "BUG: after /update the daemon's reload target is still stale \
+            "BUG: after installation the daemon's reload target is still stale \
              (shared-server pinned to {old_selfdev}); the user gets a new client \
              but the long-lived server never upgrades. shared-server-version={:?}",
             read_shared_server_version().unwrap()
@@ -622,11 +622,11 @@ fn update_leaves_daemon_reload_target_stale_when_shared_server_pinned_to_selfdev
 }
 
 /// Control case: when `shared-server` is tracking `stable` (the normal,
-/// non-self-dev install), `/update` correctly advances the daemon's reload
+/// non-self-dev install), a stable install correctly advances the daemon's reload
 /// target. This guards against a fix that over-corrects and breaks the healthy
 /// path.
 #[test]
-fn update_advances_daemon_reload_target_when_shared_server_tracks_stable() {
+fn stable_install_advances_daemon_reload_target_when_shared_server_tracks_stable() {
     with_temp_jcode_home(|| {
         let old_release = "0.14.3";
         install_binary_at_version(std::env::current_exe().as_ref().unwrap(), old_release)
@@ -636,12 +636,12 @@ fn update_advances_daemon_reload_target_when_shared_server_tracks_stable() {
         update_shared_server_symlink(old_release).expect("shared-server tracks stable");
 
         let new_release = "0.15.0";
-        simulate_stable_update_channel_swap(new_release);
+        simulate_stable_install_channel_swap(new_release);
 
         assert_eq!(
             daemon_reload_target_version().as_deref(),
             Some(new_release),
-            "daemon reload target should advance with /update when tracking stable"
+            "daemon reload target should advance after installation when tracking stable"
         );
     });
 }
@@ -655,12 +655,12 @@ fn candidate_version(candidate: Option<(PathBuf, &'static str)>) -> Option<Strin
         .map(|name| name.to_string_lossy().into_owned())
 }
 
-/// Documents the channel-level precondition behind the "/update -> new client,
-/// stale server" bug for a self-dev / canary daemon.
+/// Documents the channel-level precondition behind a new-client/stale-server
+/// mismatch for a self-dev / canary daemon.
 ///
 /// The daemon decides "is a server update available?" via `server_has_newer_binary`,
 /// which scans BOTH candidate flavors (`shared_server_update_candidate(false)`
-/// AND `(true)`). After `/update`, the `false` flavor self-heals to the freshly
+/// AND `(true)`). After installation, the `false` flavor self-heals to the freshly
 /// installed release, so the daemon reports `server_has_update = true`.
 ///
 /// The single-flavor reload target, however, diverges: a self-dev/canary session
@@ -687,7 +687,7 @@ fn selfdev_reload_target_diverges_from_update_probe_when_shared_server_pinned() 
         update_shared_server_symlink(old_selfdev).expect("shared-server pinned selfdev");
 
         let new_release = "0.15.0";
-        simulate_stable_update_channel_swap(new_release);
+        simulate_stable_install_channel_swap(new_release);
 
         // The "is there a server update?" probe (false flavor) self-heals and
         // sees the new release, so the daemon advertises an update.
@@ -740,7 +740,7 @@ fn repair_repoints_stale_shared_server_to_newer_stable() {
         let old = "0.14.6";
         let new = "0.22.0";
         // shared-server pinned to the OLD build; stable advanced to the NEW
-        // release (the "current client, no-op /update, stale server" state).
+        // release (the "current client, stale server" state).
         write_versioned_binary(old, base);
         write_versioned_binary(new, base + Duration::from_secs(60));
         update_shared_server_symlink(old).expect("pin shared-server old");

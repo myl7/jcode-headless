@@ -126,7 +126,6 @@ def profile_single_spawn(binary: str, cwd: str, timeout_s: float) -> dict:
             "JCODE_SOCKET": str(socket_path),
             "JCODE_DEBUG_SOCKET": str(debug_socket_path),
             "JCODE_SWARM_ENABLED": "0",
-            "JCODE_NO_TELEMETRY": "1",
             "JCODE_TRACE": "1",
             "JCODE_TEMP_SERVER": "1",
             "JCODE_SERVER_OWNER_PID": str(os.getpid()),
@@ -134,7 +133,7 @@ def profile_single_spawn(binary: str, cwd: str, timeout_s: float) -> dict:
     )
 
     server_proc = subprocess.Popen(
-        [binary, "--no-update", "--no-selfdev", "serve", "--socket", str(socket_path)],
+        [binary, "--no-selfdev", "serve", "--socket", str(socket_path)],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -150,7 +149,6 @@ def profile_single_spawn(binary: str, cwd: str, timeout_s: float) -> dict:
         client_proc = subprocess.Popen(
             [
                 binary,
-                "--no-update",
                 "--no-selfdev",
                 "--socket",
                 str(socket_path),

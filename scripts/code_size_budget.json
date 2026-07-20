@@ -14,7 +14,6 @@
     "crates/jcode-app-core/src/tool/communicate.rs": 3347,
     "crates/jcode-app-core/src/tool/discover.rs": 2127,
     "crates/jcode-app-core/src/tool/session_search.rs": 1892,
-    "crates/jcode-app-core/src/update.rs": 1716,
     "crates/jcode-base/src/auth/lifecycle.rs": 2609,
     "crates/jcode-base/src/auth/mod.rs": 1432,
     "crates/jcode-base/src/background.rs": 1465,
@@ -41,7 +40,6 @@
     "crates/jcode-provider-openai-runtime/src/openai_stream_runtime.rs": 1649,
     "crates/jcode-provider-openrouter-runtime/src/lib.rs": 2756,
     "crates/jcode-render-core/src/math.rs": 1250,
-    "crates/jcode-telemetry-core/src/lib.rs": 2101,
     "src/bin/memory_recall_bench.rs": 2667,
     "src/cli/commands.rs": 2604
   },

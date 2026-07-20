@@ -424,7 +424,6 @@ def run_attempt(args: argparse.Namespace, case: BenchmarkCase, attempt: int, soc
         "--socket",
         str(socket_path),
         "--no-selfdev",
-        "--no-update",
         "--model",
         args.model,
         "-C",
@@ -549,7 +548,6 @@ def start_server(args: argparse.Namespace, socket_path: Path) -> subprocess.Pope
         "--socket",
         str(socket_path),
         "--no-selfdev",
-        "--no-update",
     ]
     if args.provider:
         command += ["--provider", args.provider]
@@ -773,7 +771,6 @@ def main() -> int:
         "benchmark_marker": {
             "environment": f"{BENCHMARK_ENV}=1",
             "request_header": f"{BENCHMARK_HEADER}: 1",
-            "telemetry_field": "benchmark_run=true",
         },
         "config": {
             "catalog_source": str(args.catalog_file) if args.catalog_file else "discover_tools",

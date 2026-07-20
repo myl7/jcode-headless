@@ -59,7 +59,7 @@ pub struct TokenUsageTotals {
     pub messages_with_token_usage: usize,
     pub input_tokens: u64,
     pub output_tokens: u64,
-    /// Input tokens from requests where the provider reported cache telemetry.
+    /// Input tokens from requests where the provider reported cache accounting.
     /// This may be lower than `input_tokens` for providers or older sessions that
     /// did not expose cache-read/cache-write fields.
     pub cache_reported_input_tokens: u64,

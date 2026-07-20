@@ -10,7 +10,6 @@ Jcode supports Windows as a first-class platform. The Windows implementation use
 | Windows 11 ARM64 | Release builds and automated install checks |
 | PowerShell installer | Tested on Windows CI |
 | Native IPC and process lifecycle | Covered by targeted and end-to-end Windows tests |
-| `jcode update` | Supported with SHA-256 verification |
 | Release assets | x64 and ARM64 `.exe` and `.tar.gz` assets |
 | Authenticode signing | Release pipeline ready; requires the one-time Azure configuration below |
 

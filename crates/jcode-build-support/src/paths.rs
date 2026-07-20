@@ -83,8 +83,8 @@ pub const SELFDEV_CARGO_PROFILE: &str = "selfdev";
 /// payload. Any "is the candidate the same/newer binary than the running one?"
 /// comparison must therefore compare payloads. Comparing the wrapper against
 /// the payload compares two different files with unrelated mtimes, which made
-/// `server_has_newer_binary()` report a phantom update forever and locked
-/// post-`/update` sessions into an infinite reload loop.
+/// `server_has_newer_binary()` report a phantom newer binary forever and locked
+/// sessions into an infinite reload loop after an external install.
 ///
 /// Returns the canonicalized payload path when `path` resolves to a wrapper
 /// script with a unique sibling `<stem>-*.bin` payload; otherwise returns the
@@ -334,7 +334,7 @@ pub fn update_launcher_symlink_to_stable() -> Result<PathBuf> {
     update_launcher_symlink(&stable)
 }
 
-/// Resolve which client binary should be considered for launches, updates, and reloads.
+/// Resolve which client binary should be considered for launches and reloads.
 ///
 /// Order matters:
 /// - Prefer the published `current` channel first (active local build)

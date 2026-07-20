@@ -1,11 +1,10 @@
-use super::{Tool, ToolContext, ToolExecutionMode, ToolOutput};
+use super::{Tool, ToolContext, ToolOutput};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fmt;
 use std::time::Duration;
-use std::time::Instant;
 
 /// Hard timeout for discovery requests. Discovery is optional by design: if
 /// the endpoint is slow or unreachable the tool fails plainly and the agent
@@ -14,16 +13,6 @@ const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const DISCOVERY_REQUEST_ID_HEADER: &str = "x-jcode-discovery-request-id";
 const DISCOVERY_BENCHMARK_HEADER: &str = "x-jcode-discovery-benchmark";
-const DISCOVERY_SESSION_ID_HEADER: &str = "x-jcode-discovery-session-id";
-const DISCOVERY_SESSION_METADATA_HEADER: &str = "x-jcode-discovery-session-metadata";
-const DISCOVERY_SELF_DEV_HEADER: &str = "x-jcode-discovery-self-dev";
-const DISCOVERY_DEBUG_HEADER: &str = "x-jcode-discovery-debug";
-const DISCOVERY_CANARY_HEADER: &str = "x-jcode-discovery-canary";
-const DISCOVERY_EXECUTION_MODE_HEADER: &str = "x-jcode-discovery-execution-mode";
-const DISCOVERY_BUILD_CHANNEL_HEADER: &str = "x-jcode-discovery-build-channel";
-const DISCOVERY_GIT_CHECKOUT_HEADER: &str = "x-jcode-discovery-git-checkout";
-const DISCOVERY_CI_HEADER: &str = "x-jcode-discovery-ci";
-const DISCOVERY_RAN_FROM_CARGO_HEADER: &str = "x-jcode-discovery-ran-from-cargo";
 const DISCOVERY_BENCHMARK_ENV: &str = "JCODE_DISCOVERY_BENCHMARK";
 const DISCOVERY_QUERY_MIN_CHARS: usize = 20;
 const DISCOVERY_QUERY_MAX_CHARS: usize = 500;
@@ -44,16 +33,11 @@ fn discovery_benchmark_run() -> bool {
 #[derive(Debug)]
 struct DiscoveryFetchResult {
     listing: Value,
-    http_status: u16,
-    response_bytes: u64,
 }
 
 #[derive(Debug)]
 struct DiscoveryFetchError {
     message: String,
-    failure_reason: &'static str,
-    http_status: Option<u16>,
-    response_bytes: Option<u64>,
 }
 
 struct DiscoveryRequestContext<'a> {
@@ -64,72 +48,6 @@ struct DiscoveryRequestContext<'a> {
     query: &'a str,
     reason: &'a str,
     benchmark_run: bool,
-    provenance: DiscoveryRequestProvenance,
-}
-
-#[derive(Debug, Clone)]
-struct DiscoveryRequestProvenance {
-    session_id: String,
-    session_metadata_available: bool,
-    is_self_dev: bool,
-    is_debug: bool,
-    is_canary: bool,
-    execution_mode: &'static str,
-    build_channel: String,
-    is_git_checkout: bool,
-    is_ci: bool,
-    ran_from_cargo: bool,
-}
-
-impl DiscoveryRequestProvenance {
-    fn from_tool_context(ctx: &ToolContext) -> Self {
-        let session = crate::session::Session::load(&ctx.session_id).ok();
-        let runtime = crate::telemetry::runtime_provenance();
-        Self {
-            session_id: ctx.session_id.clone(),
-            session_metadata_available: session.is_some(),
-            is_self_dev: session
-                .as_ref()
-                .is_some_and(|session| session.is_self_dev()),
-            is_debug: session.as_ref().is_some_and(|session| session.is_debug),
-            is_canary: session.as_ref().is_some_and(|session| session.is_canary),
-            execution_mode: match ctx.execution_mode {
-                ToolExecutionMode::AgentTurn => "agent_turn",
-                ToolExecutionMode::Direct => "direct",
-            },
-            build_channel: runtime.build_channel,
-            is_git_checkout: runtime.is_git_checkout,
-            is_ci: runtime.is_ci,
-            ran_from_cargo: runtime.ran_from_cargo,
-        }
-    }
-
-    fn apply(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request
-            .header(DISCOVERY_SESSION_ID_HEADER, &self.session_id)
-            .header(
-                DISCOVERY_SESSION_METADATA_HEADER,
-                bool_header(self.session_metadata_available),
-            )
-            .header(DISCOVERY_SELF_DEV_HEADER, bool_header(self.is_self_dev))
-            .header(DISCOVERY_DEBUG_HEADER, bool_header(self.is_debug))
-            .header(DISCOVERY_CANARY_HEADER, bool_header(self.is_canary))
-            .header(DISCOVERY_EXECUTION_MODE_HEADER, self.execution_mode)
-            .header(DISCOVERY_BUILD_CHANNEL_HEADER, &self.build_channel)
-            .header(
-                DISCOVERY_GIT_CHECKOUT_HEADER,
-                bool_header(self.is_git_checkout),
-            )
-            .header(DISCOVERY_CI_HEADER, bool_header(self.is_ci))
-            .header(
-                DISCOVERY_RAN_FROM_CARGO_HEADER,
-                bool_header(self.ran_from_cargo),
-            )
-    }
-}
-
-fn bool_header(value: bool) -> &'static str {
-    if value { "1" } else { "0" }
 }
 
 impl fmt::Display for DiscoveryFetchError {
@@ -140,40 +58,6 @@ impl fmt::Display for DiscoveryFetchError {
 
 impl std::error::Error for DiscoveryFetchError {}
 
-#[allow(clippy::too_many_arguments)]
-fn record_discovery_telemetry(
-    request_id: &str,
-    started_at: Instant,
-    endpoint: &str,
-    phase: &str,
-    category: Option<&str>,
-    selected_tool: Option<&str>,
-    outcome: &str,
-    failure_reason: Option<&str>,
-    http_status: Option<u16>,
-    response_bytes: Option<u64>,
-    result_count: Option<u32>,
-    query_present: bool,
-    reason_present: bool,
-) {
-    crate::telemetry::record_discovery_event(crate::telemetry::DiscoveryTelemetry {
-        request_id,
-        phase,
-        category,
-        selected_tool,
-        outcome,
-        failure_reason,
-        http_status,
-        latency_ms: started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
-        response_bytes,
-        result_count,
-        query_present,
-        reason_present,
-        benchmark_run: discovery_benchmark_run(),
-        endpoint,
-    });
-}
-
 /// `discover_tools`: fetch discoverable third-party tools for a category from
 /// the hosted partner directory.
 ///
@@ -183,7 +67,7 @@ fn record_discovery_telemetry(
 /// use. The request carries the category, a short search query, a reason string,
 /// and coarse session/build provenance used to separate likely user demand from
 /// self-dev and test traffic. It never includes transcript content, file paths,
-/// credentials, or user identity.
+/// credentials, session identifiers, build provenance, or user identity.
 pub struct DiscoverToolsTool {
     client: reqwest::Client,
 }
@@ -263,7 +147,6 @@ struct ValidatedSuggestion {
 #[derive(Debug)]
 struct DiscoveryInputError {
     message: String,
-    failure_reason: &'static str,
 }
 
 fn validate_discovery_text(
@@ -278,11 +161,6 @@ fn validate_discovery_text(
             message: format!(
                 "discovery {field} is required; write a specific summary without private data"
             ),
-            failure_reason: if field == "query" {
-                "missing_query"
-            } else {
-                "missing_reason"
-            },
         });
     }
 
@@ -292,11 +170,6 @@ fn validate_discovery_text(
             message: format!(
                 "discovery {field} is too short; provide at least {min_chars} characters of specific, non-private context"
             ),
-            failure_reason: if field == "query" {
-                "query_too_short"
-            } else {
-                "reason_too_short"
-            },
         });
     }
     if chars > max_chars {
@@ -304,11 +177,6 @@ fn validate_discovery_text(
             message: format!(
                 "discovery {field} is too long; summarize it in at most {max_chars} characters without private data"
             ),
-            failure_reason: if field == "query" {
-                "query_too_long"
-            } else {
-                "reason_too_long"
-            },
         });
     }
     if contains_recognizable_secret(value) {
@@ -316,11 +184,6 @@ fn validate_discovery_text(
             message: format!(
                 "discovery {field} appears to contain a secret or financial credential; replace it with a non-sensitive description"
             ),
-            failure_reason: if field == "query" {
-                "query_sensitive_data"
-            } else {
-                "reason_sensitive_data"
-            },
         });
     }
     if !has_sufficient_detail(value, field) {
@@ -328,11 +191,6 @@ fn validate_discovery_text(
             message: format!(
                 "discovery {field} is not specific enough; describe the capability and task constraints in distinct words without private data"
             ),
-            failure_reason: if field == "query" {
-                "query_not_specific"
-            } else {
-                "reason_not_specific"
-            },
         });
     }
     Ok(value.to_string())
@@ -628,28 +486,12 @@ impl Tool for DiscoverToolsTool {
         })
     }
 
-    async fn execute(&self, input: Value, ctx: ToolContext) -> Result<ToolOutput> {
-        let started_at = Instant::now();
+    async fn execute(&self, input: Value, _ctx: ToolContext) -> Result<ToolOutput> {
         let request_id = uuid::Uuid::new_v4().to_string();
         let config = crate::config::config();
         let endpoint = config.sponsors.endpoint.clone();
         let benchmark_run = discovery_benchmark_run();
         if !config.sponsors.enabled {
-            record_discovery_telemetry(
-                &request_id,
-                started_at,
-                &endpoint,
-                "unknown",
-                None,
-                None,
-                "failure",
-                Some("disabled"),
-                None,
-                None,
-                None,
-                false,
-                false,
-            );
             return Err(anyhow::anyhow!(
                 "partner discovery is disabled (set [sponsors] enabled = true in config.toml)"
             ));
@@ -657,50 +499,10 @@ impl Tool for DiscoverToolsTool {
 
         let params: DiscoverToolsInput = match serde_json::from_value(input) {
             Ok(params) => params,
-            Err(err) => {
-                record_discovery_telemetry(
-                    &request_id,
-                    started_at,
-                    &endpoint,
-                    "unknown",
-                    None,
-                    None,
-                    "failure",
-                    Some("invalid_input"),
-                    None,
-                    None,
-                    None,
-                    false,
-                    false,
-                );
-                return Err(err.into());
-            }
+            Err(err) => return Err(err.into()),
         };
         let category = params.category.trim().to_ascii_lowercase();
-        let query_present = params
-            .query
-            .as_deref()
-            .is_some_and(|value| !value.trim().is_empty());
-        let reason_present = params
-            .reason
-            .as_deref()
-            .is_some_and(|value| !value.trim().is_empty());
         if !crate::sponsors::DISCOVERY_CATEGORIES.contains(&category.as_str()) {
-            record_discovery_telemetry(
-                &request_id,
-                started_at,
-                &endpoint,
-                "unknown",
-                None,
-                None,
-                "failure",
-                Some("invalid_category"),
-                None,
-                None,
-                None,
-                query_present,
-                reason_present,
-            );
             return Err(anyhow::anyhow!(
                 "unknown discovery category '{}'. Available: {}",
                 category,
@@ -715,24 +517,7 @@ impl Tool for DiscoverToolsTool {
             DISCOVERY_QUERY_MAX_CHARS,
         ) {
             Ok(query) => query,
-            Err(err) => {
-                record_discovery_telemetry(
-                    &request_id,
-                    started_at,
-                    &endpoint,
-                    "unknown",
-                    Some(&category),
-                    None,
-                    "failure",
-                    Some(err.failure_reason),
-                    None,
-                    None,
-                    None,
-                    query_present,
-                    reason_present,
-                );
-                return Err(anyhow::anyhow!(err.message));
-            }
+            Err(err) => return Err(anyhow::anyhow!(err.message)),
         };
         let reason = match validate_discovery_text(
             params.reason.as_deref(),
@@ -741,24 +526,7 @@ impl Tool for DiscoverToolsTool {
             DISCOVERY_REASON_MAX_CHARS,
         ) {
             Ok(reason) => reason,
-            Err(err) => {
-                record_discovery_telemetry(
-                    &request_id,
-                    started_at,
-                    &endpoint,
-                    "unknown",
-                    Some(&category),
-                    None,
-                    "failure",
-                    Some(err.failure_reason),
-                    None,
-                    None,
-                    None,
-                    query_present,
-                    reason_present,
-                );
-                return Err(anyhow::anyhow!(err.message));
-            }
+            Err(err) => return Err(anyhow::anyhow!(err.message)),
         };
 
         let tool_selection = params
@@ -776,49 +544,16 @@ impl Tool for DiscoverToolsTool {
             query: &query,
             reason: &reason,
             benchmark_run,
-            provenance: DiscoveryRequestProvenance::from_tool_context(&ctx),
         };
 
         if action == DiscoveryAction::Suggest {
             let suggestion = validate_suggestion(&params)?;
             let fetched = match submit_suggestion(&discovery_request, &suggestion).await {
                 Ok(result) => result,
-                Err(err) => {
-                    record_discovery_telemetry(
-                        &request_id,
-                        started_at,
-                        &endpoint,
-                        "suggest",
-                        Some(&category),
-                        None,
-                        "failure",
-                        Some(err.failure_reason),
-                        err.http_status,
-                        err.response_bytes,
-                        None,
-                        query_present,
-                        reason_present,
-                    );
-                    return Err(err.into());
-                }
+                Err(err) => return Err(err.into()),
             };
             let rendered =
                 render_suggestion(&category, &query, &reason, &suggestion, &fetched.listing)?;
-            record_discovery_telemetry(
-                &request_id,
-                started_at,
-                &endpoint,
-                "suggest",
-                Some(&category),
-                None,
-                "success",
-                None,
-                Some(fetched.http_status),
-                Some(fetched.response_bytes),
-                Some(1),
-                query_present,
-                reason_present,
-            );
             return Ok(ToolOutput::new(rendered)
                 .with_title("catalog suggestion".to_string())
                 .with_metadata(json!({
@@ -834,73 +569,12 @@ impl Tool for DiscoverToolsTool {
         if let Some(tool_name) = tool_selection {
             let fetched = match fetch_listing(&discovery_request, Some(&tool_name)).await {
                 Ok(result) => result,
-                Err(err) => {
-                    record_discovery_telemetry(
-                        &request_id,
-                        started_at,
-                        &endpoint,
-                        "select",
-                        Some(&category),
-                        None,
-                        "failure",
-                        Some(err.failure_reason),
-                        err.http_status,
-                        err.response_bytes,
-                        None,
-                        query_present,
-                        reason_present,
-                    );
-                    return Err(err.into());
-                }
+                Err(err) => return Err(err.into()),
             };
             let rendered = match render_selection(&category, &tool_name, &fetched.listing) {
                 Ok(rendered) => rendered,
-                Err(err) => {
-                    record_discovery_telemetry(
-                        &request_id,
-                        started_at,
-                        &endpoint,
-                        "select",
-                        Some(&category),
-                        None,
-                        "failure",
-                        Some("invalid_response"),
-                        Some(fetched.http_status),
-                        Some(fetched.response_bytes),
-                        None,
-                        query_present,
-                        reason_present,
-                    );
-                    return Err(err);
-                }
+                Err(err) => return Err(err),
             };
-            crate::sponsors::provenance::record_discovered_setups(extract_mcp_setups_from(
-                fetched
-                    .listing
-                    .get("tool")
-                    .map(std::slice::from_ref)
-                    .unwrap_or(&[]),
-            ));
-            let canonical_tool = fetched
-                .listing
-                .get("tool")
-                .and_then(|tool| tool.get("name"))
-                .and_then(Value::as_str);
-            record_discovery_telemetry(
-                &request_id,
-                started_at,
-                &endpoint,
-                "select",
-                Some(&category),
-                canonical_tool,
-                "success",
-                None,
-                Some(fetched.http_status),
-                Some(fetched.response_bytes),
-                Some(1),
-                query_present,
-                reason_present,
-            );
             return Ok(ToolOutput::new(rendered)
                 .with_title(format!(
                     "{tool_name} {}",
@@ -916,71 +590,12 @@ impl Tool for DiscoverToolsTool {
 
         let fetched = match fetch_listing(&discovery_request, None).await {
             Ok(result) => result,
-            Err(err) => {
-                record_discovery_telemetry(
-                    &request_id,
-                    started_at,
-                    &endpoint,
-                    "browse",
-                    Some(&category),
-                    None,
-                    "failure",
-                    Some(err.failure_reason),
-                    err.http_status,
-                    err.response_bytes,
-                    None,
-                    query_present,
-                    reason_present,
-                );
-                return Err(err.into());
-            }
+            Err(err) => return Err(err.into()),
         };
         let rendered = match render_listing(&category, &fetched.listing, &request_id) {
             Ok(rendered) => rendered,
-            Err(err) => {
-                record_discovery_telemetry(
-                    &request_id,
-                    started_at,
-                    &endpoint,
-                    "browse",
-                    Some(&category),
-                    None,
-                    "failure",
-                    Some("invalid_response"),
-                    Some(fetched.http_status),
-                    Some(fetched.response_bytes),
-                    None,
-                    query_present,
-                    reason_present,
-                );
-                return Err(err);
-            }
+            Err(err) => return Err(err),
         };
-        let result_count = fetched
-            .listing
-            .get("tools")
-            .and_then(Value::as_array)
-            .map(|tools| tools.len().min(u32::MAX as usize) as u32);
-
-        // Remember MCP setups from this listing so a later `mcp connect`
-        // matching one of them is tagged with discovery provenance (and
-        // metered coarsely; see jcode_base::sponsors::provenance).
-        crate::sponsors::provenance::record_discovered_setups(extract_mcp_setups(&fetched.listing));
-        record_discovery_telemetry(
-            &request_id,
-            started_at,
-            &endpoint,
-            "browse",
-            Some(&category),
-            None,
-            "success",
-            None,
-            Some(fetched.http_status),
-            Some(fetched.response_bytes),
-            result_count,
-            query_present,
-            reason_present,
-        );
 
         Ok(ToolOutput::new(rendered)
             .with_title(format!(
@@ -1005,22 +620,20 @@ async fn fetch_listing(
     tool: Option<&str>,
 ) -> std::result::Result<DiscoveryFetchResult, DiscoveryFetchError> {
     let endpoint = context.endpoint.trim_end_matches('/');
-    let mut request = context.provenance.apply(
-        context
-            .client
-            .get(endpoint)
-            .query(&[
-                ("category", context.category),
-                ("q", context.query),
-                ("reason", context.reason),
-            ])
-            .header(
-                reqwest::header::USER_AGENT,
-                format!("jcode/{}", env!("CARGO_PKG_VERSION")),
-            )
-            .header(DISCOVERY_REQUEST_ID_HEADER, context.request_id)
-            .timeout(DISCOVERY_TIMEOUT),
-    );
+    let mut request = context
+        .client
+        .get(endpoint)
+        .query(&[
+            ("category", context.category),
+            ("q", context.query),
+            ("reason", context.reason),
+        ])
+        .header(
+            reqwest::header::USER_AGENT,
+            format!("jcode/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .header(DISCOVERY_REQUEST_ID_HEADER, context.request_id)
+        .timeout(DISCOVERY_TIMEOUT);
     if let Some(tool) = tool.filter(|t| !t.trim().is_empty()) {
         request = request.query(&[("tool", tool.trim())]);
     }
@@ -1030,50 +643,25 @@ async fn fetch_listing(
 
     let response = request.send().await.map_err(|err| DiscoveryFetchError {
         message: format!("discovery unavailable: {err}"),
-        failure_reason: if err.is_timeout() {
-            "timeout"
-        } else if err.is_connect() {
-            "connect_error"
-        } else {
-            "transport_error"
-        },
-        http_status: None,
-        response_bytes: None,
     })?;
     let status = response.status();
     if !status.is_success() {
         return Err(DiscoveryFetchError {
             message: format!("discovery unavailable: HTTP {status}"),
-            failure_reason: "http_error",
-            http_status: Some(status.as_u16()),
-            response_bytes: response.content_length(),
         });
     }
     let body = response.bytes().await.map_err(|err| DiscoveryFetchError {
         message: format!("discovery unavailable: {err}"),
-        failure_reason: "body_error",
-        http_status: Some(status.as_u16()),
-        response_bytes: None,
     })?;
     if body.len() > MAX_RESPONSE_BYTES {
         return Err(DiscoveryFetchError {
             message: format!("discovery response too large ({} bytes)", body.len()),
-            failure_reason: "response_too_large",
-            http_status: Some(status.as_u16()),
-            response_bytes: Some(body.len() as u64),
         });
     }
     let listing = serde_json::from_slice(&body).map_err(|err| DiscoveryFetchError {
         message: format!("discovery returned invalid JSON: {err}"),
-        failure_reason: "invalid_json",
-        http_status: Some(status.as_u16()),
-        response_bytes: Some(body.len() as u64),
     })?;
-    Ok(DiscoveryFetchResult {
-        listing,
-        http_status: status.as_u16(),
-        response_bytes: body.len() as u64,
-    })
+    Ok(DiscoveryFetchResult { listing })
 }
 
 async fn submit_suggestion(
@@ -1081,58 +669,41 @@ async fn submit_suggestion(
     suggestion: &ValidatedSuggestion,
 ) -> std::result::Result<DiscoveryFetchResult, DiscoveryFetchError> {
     let endpoint = format!("{}/suggestions", context.endpoint.trim_end_matches('/'));
-    let mut request = context.provenance.apply(
-        context
-            .client
-            .post(endpoint)
-            .header(
-                reqwest::header::USER_AGENT,
-                format!("jcode/{}", env!("CARGO_PKG_VERSION")),
-            )
-            .header(DISCOVERY_REQUEST_ID_HEADER, context.request_id)
-            .json(&json!({
-                "category": context.category,
-                "query": context.query,
-                "reason": context.reason,
-                "suggestion_kind": suggestion.kind,
-                "product_name": suggestion.product_name,
-                "product_url": suggestion.product_url,
-                "gap_evidence": suggestion.gap_evidence,
-                "requirements": suggestion.requirements,
-                "prior_request_id": suggestion.prior_request_id,
-            }))
-            .timeout(DISCOVERY_TIMEOUT),
-    );
+    let mut request = context
+        .client
+        .post(endpoint)
+        .header(
+            reqwest::header::USER_AGENT,
+            format!("jcode/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .header(DISCOVERY_REQUEST_ID_HEADER, context.request_id)
+        .json(&json!({
+            "category": context.category,
+            "query": context.query,
+            "reason": context.reason,
+            "suggestion_kind": suggestion.kind,
+            "product_name": suggestion.product_name,
+            "product_url": suggestion.product_url,
+            "gap_evidence": suggestion.gap_evidence,
+            "requirements": suggestion.requirements,
+            "prior_request_id": suggestion.prior_request_id,
+        }))
+        .timeout(DISCOVERY_TIMEOUT);
     if context.benchmark_run {
         request = request.header(DISCOVERY_BENCHMARK_HEADER, "1");
     }
     let response = request.send().await.map_err(|err| DiscoveryFetchError {
         message: format!("catalog suggestion unavailable: {err}"),
-        failure_reason: if err.is_timeout() {
-            "timeout"
-        } else if err.is_connect() {
-            "connect_error"
-        } else {
-            "transport_error"
-        },
-        http_status: None,
-        response_bytes: None,
     })?;
     let status = response.status();
     let duplicate = status == reqwest::StatusCode::CONFLICT;
     if !status.is_success() && !duplicate {
         return Err(DiscoveryFetchError {
             message: format!("catalog suggestion unavailable: HTTP {status}"),
-            failure_reason: "http_error",
-            http_status: Some(status.as_u16()),
-            response_bytes: response.content_length(),
         });
     }
     let body = response.bytes().await.map_err(|err| DiscoveryFetchError {
         message: format!("catalog suggestion unavailable: {err}"),
-        failure_reason: "body_error",
-        http_status: Some(status.as_u16()),
-        response_bytes: None,
     })?;
     if body.len() > MAX_RESPONSE_BYTES {
         return Err(DiscoveryFetchError {
@@ -1140,22 +711,12 @@ async fn submit_suggestion(
                 "catalog suggestion response too large ({} bytes)",
                 body.len()
             ),
-            failure_reason: "response_too_large",
-            http_status: Some(status.as_u16()),
-            response_bytes: Some(body.len() as u64),
         });
     }
     let listing = serde_json::from_slice(&body).map_err(|err| DiscoveryFetchError {
         message: format!("catalog suggestion returned invalid JSON: {err}"),
-        failure_reason: "invalid_json",
-        http_status: Some(status.as_u16()),
-        response_bytes: Some(body.len() as u64),
     })?;
-    Ok(DiscoveryFetchResult {
-        listing,
-        http_status: status.as_u16(),
-        response_bytes: body.len() as u64,
-    })
+    Ok(DiscoveryFetchResult { listing })
 }
 
 fn validate_suggestion(params: &DiscoverToolsInput) -> Result<ValidatedSuggestion> {
@@ -1316,41 +877,6 @@ fn normalize_suggestion_url(value: Option<&str>) -> Result<Option<String>> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(Some(url.to_string()))
-}
-
-/// Extract structured MCP setups (`mcp: { command, args }`) from a listing
-/// for provenance matching. Entries without an `mcp` descriptor are skipped.
-fn extract_mcp_setups(listing: &Value) -> Vec<crate::sponsors::provenance::DiscoveredSetup> {
-    let Some(tools) = listing.get("tools").and_then(|v| v.as_array()) else {
-        return Vec::new();
-    };
-    extract_mcp_setups_from(tools)
-}
-
-/// Extract MCP setups from a slice of tool entries.
-fn extract_mcp_setups_from(tools: &[Value]) -> Vec<crate::sponsors::provenance::DiscoveredSetup> {
-    tools
-        .iter()
-        .filter_map(|tool| {
-            let sponsor = tool.get("name")?.as_str()?.trim().to_ascii_lowercase();
-            let mcp = tool.get("mcp")?;
-            let command = mcp.get("command")?.as_str()?.to_string();
-            let args = mcp
-                .get("args")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|a| a.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(crate::sponsors::provenance::DiscoveredSetup {
-                sponsor,
-                command,
-                args,
-            })
-        })
-        .collect()
 }
 
 /// Render a discovery listing (browse phase) for the model. Expected shape:
@@ -1549,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    fn agentmail_selection_preserves_signup_attribution_and_mcp_provenance() {
+    fn agentmail_selection_preserves_signup_attribution_and_mcp_setup() {
         let listing = json!({
             "tool": {
                 "name": "agentmail",
@@ -1573,16 +1099,6 @@ mod tests {
         assert!(rendered.contains("\"referrer\":\"https://jcode.sh/discovery-tools\""));
         assert!(rendered.contains("agentmail-mcp@1.0.0"));
         assert!(rendered.contains("must note the partnership"));
-
-        let setups = extract_mcp_setups_from(std::slice::from_ref(&listing["tool"]));
-        assert_eq!(
-            setups,
-            vec![crate::sponsors::provenance::DiscoveredSetup {
-                sponsor: "agentmail".to_string(),
-                command: "npx".to_string(),
-                args: vec!["-y".to_string(), "agentmail-mcp@1.0.0".to_string()],
-            }]
-        );
     }
 
     #[test]
@@ -1781,14 +1297,12 @@ mod tests {
 
     #[test]
     fn discovery_text_requires_substantive_content() {
-        let missing = validate_discovery_text(None, "query", 20, 500).unwrap_err();
-        assert_eq!(missing.failure_reason, "missing_query");
-        let short = validate_discovery_text(Some("payment tool"), "query", 20, 500).unwrap_err();
-        assert_eq!(short.failure_reason, "query_too_short");
-        let padded =
+        assert!(validate_discovery_text(None, "query", 20, 500).is_err());
+        assert!(validate_discovery_text(Some("payment tool"), "query", 20, 500).is_err());
+        assert!(
             validate_discovery_text(Some("tool tool tool tool tool tool"), "query", 20, 500)
-                .unwrap_err();
-        assert_eq!(padded.failure_reason, "query_not_specific");
+                .is_err()
+        );
         let valid = validate_discovery_text(
             Some("  virtual card for a capped online checkout  "),
             "query",
@@ -1818,7 +1332,6 @@ mod tests {
         ];
         for value in sensitive {
             let err = validate_discovery_text(Some(&value), "reason", 40, 2_000).unwrap_err();
-            assert_eq!(err.failure_reason, "reason_sensitive_data", "{value}");
             assert!(!err.message.contains(&value));
         }
     }
@@ -1876,22 +1389,6 @@ mod tests {
             query: "virtual card for checkout",
             reason: "task needs an online payment capability",
             benchmark_run,
-            provenance: test_provenance(),
-        }
-    }
-
-    fn test_provenance() -> DiscoveryRequestProvenance {
-        DiscoveryRequestProvenance {
-            session_id: "session-test-1".to_string(),
-            session_metadata_available: true,
-            is_self_dev: true,
-            is_debug: false,
-            is_canary: true,
-            execution_mode: "agent_turn",
-            build_channel: "selfdev".to_string(),
-            is_git_checkout: true,
-            is_ci: false,
-            ran_from_cargo: true,
         }
     }
 
@@ -1903,13 +1400,10 @@ mod tests {
         let request = test_discovery_request(&client, &endpoint, "request-test-1", true);
         let listing = fetch_listing(&request, None).await.unwrap();
         assert_eq!(listing.listing["tools"][0]["name"], "agentcard");
-        assert_eq!(listing.http_status, 200);
-        assert!(listing.response_bytes > 0);
 
         let request = server.await.unwrap();
         let request_line = request.lines().next().unwrap();
-        // Exactly the three disclosed query parameters. Provenance is carried
-        // in bounded headers so it cannot be confused with model-authored text.
+        // Exactly the three disclosed query parameters and functional request ID.
         assert!(request_line.contains("category=payments"), "{request_line}");
         assert!(request_line.contains("q=virtual"), "{request_line}");
         assert!(request_line.contains("reason=task"), "{request_line}");
@@ -1925,19 +1419,24 @@ mod tests {
                 .contains("x-jcode-discovery-benchmark: 1"),
             "{request}"
         );
-        for expected in [
-            "x-jcode-discovery-session-id: session-test-1",
-            "x-jcode-discovery-session-metadata: 1",
-            "x-jcode-discovery-self-dev: 1",
-            "x-jcode-discovery-debug: 0",
-            "x-jcode-discovery-canary: 1",
-            "x-jcode-discovery-execution-mode: agent_turn",
-            "x-jcode-discovery-build-channel: selfdev",
-            "x-jcode-discovery-git-checkout: 1",
-            "x-jcode-discovery-ci: 0",
-            "x-jcode-discovery-ran-from-cargo: 1",
+        for removed_provenance_header in [
+            "x-jcode-discovery-session-id",
+            "x-jcode-discovery-session-metadata",
+            "x-jcode-discovery-self-dev",
+            "x-jcode-discovery-debug",
+            "x-jcode-discovery-canary",
+            "x-jcode-discovery-execution-mode",
+            "x-jcode-discovery-build-channel",
+            "x-jcode-discovery-git-checkout",
+            "x-jcode-discovery-ci",
+            "x-jcode-discovery-ran-from-cargo",
         ] {
-            assert!(request.to_ascii_lowercase().contains(expected), "{request}");
+            assert!(
+                !request
+                    .to_ascii_lowercase()
+                    .contains(removed_provenance_header),
+                "{request}"
+            );
         }
     }
 
@@ -1949,8 +1448,6 @@ mod tests {
         let request = test_discovery_request(&client, &endpoint, "request-test-2", false);
         let err = fetch_listing(&request, None).await.unwrap_err();
         assert!(err.to_string().contains("discovery unavailable"));
-        assert_eq!(err.failure_reason, "http_error");
-        assert_eq!(err.http_status, Some(500));
     }
 
     #[tokio::test]
@@ -1961,7 +1458,6 @@ mod tests {
             test_discovery_request(&client, "http://127.0.0.1:9", "request-test-3", false);
         let err = fetch_listing(&request, None).await.unwrap_err();
         assert!(err.to_string().contains("discovery unavailable"));
-        assert_eq!(err.failure_reason, "connect_error");
     }
 
     #[tokio::test]
@@ -1992,10 +1488,8 @@ mod tests {
             query: "manage Stripe sandbox products through scoped agent access",
             reason: "the current payment listing only provides cards and cannot manage Stripe test data",
             benchmark_run: true,
-            provenance: test_provenance(),
         };
         let result = submit_suggestion(&request, &suggestion).await.unwrap();
-        assert_eq!(result.http_status, 202);
         assert_eq!(result.listing["status"], "received");
 
         let request = server.await.unwrap();
@@ -2044,10 +1538,8 @@ mod tests {
             query: "manage Stripe sandbox products through scoped agent access",
             reason: "the current payment listing only provides cards and cannot manage Stripe test data",
             benchmark_run: false,
-            provenance: test_provenance(),
         };
         let result = submit_suggestion(&request, &suggestion).await.unwrap();
-        assert_eq!(result.http_status, 409);
         assert_eq!(result.listing["status"], "duplicate");
     }
 

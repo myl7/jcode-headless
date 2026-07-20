@@ -1,5 +1,5 @@
 {
-  "total": 27,
+  "total": 25,
   "tracked_files": {
     "crates/jcode-app-core/src/tool/communicate.rs": 1,
     "crates/jcode-base/src/hooks.rs": 1,
@@ -7,7 +7,6 @@
     "crates/jcode-provider-doctor/src/lifecycle_driver.rs": 2,
     "crates/jcode-render-core/src/math.rs": 4,
     "crates/jcode-render-core/src/preprocess.rs": 2,
-    "crates/jcode-telemetry-core/src/lib.rs": 2,
     "src/bin/memory_recall_bench.rs": 14
   },
   "version": 1

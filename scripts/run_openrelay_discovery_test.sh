@@ -105,10 +105,8 @@ set +e
 JCODE_HOME="$test_home" \
 JCODE_RUNTIME_DIR="$runtime_dir" \
 JCODE_DISCOVERY_BENCHMARK=1 \
-JCODE_NO_TELEMETRY=1 \
   "$JCODE_BIN" \
     --no-selfdev \
-    --no-update \
     --provider "$PROVIDER" \
     --model "$MODEL" \
     --disable-base-tools \

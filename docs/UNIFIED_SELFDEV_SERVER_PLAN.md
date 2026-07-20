@@ -162,7 +162,6 @@ There are multiple `JCODE_SELFDEV_MODE` checks across startup, hot reload, and s
 
 - `src/cli/dispatch.rs`
 - `src/cli/selfdev.rs`
-- `src/cli/hot_exec.rs`
 - `src/server.rs`
 - `src/server/reload.rs`
 - `src/server/client_session.rs`

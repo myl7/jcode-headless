@@ -32,7 +32,6 @@ USER jcode
 WORKDIR /workspace
 ENV JCODE_HOME=/var/lib/jcode \
     JCODE_NON_INTERACTIVE=1 \
-    JCODE_NO_TELEMETRY=1 \
     RUST_BACKTRACE=1
 
 VOLUME ["/var/lib/jcode"]

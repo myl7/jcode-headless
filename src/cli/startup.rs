@@ -1,13 +1,9 @@
 use anyhow::Result;
 use clap::Parser;
-use std::process::Command as ProcessCommand;
 
-use crate::{build, logging, server, startup_profile, storage, telemetry, update};
+use crate::{logging, server, startup_profile, storage};
 
-use super::{
-    args::{Args, Command},
-    dispatch, hot_exec, output, terminal,
-};
+use super::{args::Args, dispatch, output, terminal};
 
 pub async fn run() -> Result<()> {
     // This distribution has no interactive UI or login surface. Provider
@@ -87,12 +83,7 @@ pub async fn run() -> Result<()> {
     storage::harden_user_config_permissions();
     startup_profile::mark("perm_harden");
 
-    telemetry::record_install_if_first_run();
-    telemetry::record_upgrade_if_needed();
-    startup_profile::mark("telemetry_check");
-
     let args = parse_and_prepare_args()?;
-    spawn_background_update_check(&args);
 
     if let Err(e) = dispatch::run_main(args).await {
         report_main_error(&e);
@@ -210,95 +201,6 @@ fn parse_and_prepare_args() -> Result<Args> {
     Ok(args)
 }
 
-fn spawn_background_update_check(args: &Args) {
-    let check_updates = should_spawn_background_update_check(args);
-    let auto_update = should_auto_install_update(args);
-
-    if !check_updates {
-        return;
-    }
-
-    if update::is_release_build() {
-        std::thread::spawn(move || match update::check_and_maybe_update(auto_update) {
-            update::UpdateCheckResult::UpdateAvailable {
-                current, latest, ..
-            } => {
-                logging::info(&format!("Update available: {} -> {}", current, latest));
-            }
-            update::UpdateCheckResult::UpdateInstalled { version, path } => {
-                logging::info(&format!("Updated to {}. Restarting...", version));
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                let args: Vec<String> = std::env::args().skip(1).collect();
-                let exec_path = build::client_update_candidate(false)
-                    .map(|(p, _)| p)
-                    .unwrap_or(path);
-                let err = crate::platform::replace_process(
-                    ProcessCommand::new(&exec_path)
-                        .args(&args)
-                        .arg("--no-update"),
-                );
-                eprintln!("Failed to exec new binary: {}", err);
-            }
-            update::UpdateCheckResult::Error(e) => {
-                logging::info(&format!("Update check failed: {}", e));
-            }
-            update::UpdateCheckResult::NoUpdate => {}
-        });
-    } else {
-        std::thread::spawn(move || {
-            use crate::bus::{Bus, BusEvent, UpdateStatus};
-
-            let start = std::time::Instant::now();
-            Bus::global().publish(BusEvent::UpdateStatus(UpdateStatus::Checking));
-            if let Some(update_available) = hot_exec::check_for_updates()
-                && update_available
-            {
-                Bus::global().publish(BusEvent::UpdateStatus(UpdateStatus::Available {
-                    current: jcode_build_meta::version().to_string(),
-                    latest: "latest source".to_string(),
-                }));
-                if auto_update {
-                    logging::info("Update available - auto-updating...");
-                    Bus::global().publish(BusEvent::UpdateStatus(UpdateStatus::Installing {
-                        version: "latest source".to_string(),
-                    }));
-                    if let Err(e) = hot_exec::run_auto_update() {
-                        Bus::global()
-                            .publish(BusEvent::UpdateStatus(UpdateStatus::Error(e.to_string())));
-                        logging::error(&format!(
-                            "Auto-update failed: {}. Continuing with current version.",
-                            e
-                        ));
-                    }
-                } else {
-                    logging::info("Update available! Run `jcode update` or `/reload` to update.");
-                }
-            } else {
-                Bus::global().publish(BusEvent::UpdateStatus(UpdateStatus::UpToDate));
-            }
-            logging::info(&format!(
-                "[TIMING] background_update_check: auto_update={}, total={}ms",
-                auto_update,
-                start.elapsed().as_millis()
-            ));
-        });
-    }
-}
-
-fn should_spawn_background_update_check(args: &Args) -> bool {
-    !args.quiet
-        && !args.no_update
-        && !matches!(
-            args.command,
-            Some(Command::Update) | Some(Command::Serve { .. }) | Some(Command::Acp)
-        )
-        && args.resume.is_none()
-}
-
-fn should_auto_install_update(args: &Args) -> bool {
-    args.auto_update
-}
-
 fn report_main_error(error: &anyhow::Error) {
     let error_str = format!("{:?}", error);
     logging::error(&error_str);
@@ -314,39 +216,6 @@ fn report_main_error(error: &anyhow::Error) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::args::{Args, Command};
-    use clap::Parser;
-
-    fn parse_args(argv: &[&str]) -> Args {
-        Args::parse_from(argv)
-    }
-
-    #[test]
-    fn auto_install_allowed_without_live_terminal() {
-        let args = parse_args(&["jcode", "version"]);
-        assert!(should_auto_install_update(&args));
-    }
-
-    #[test]
-    fn auto_install_allowed_with_live_terminal_attached() {
-        let args = parse_args(&["jcode", "version"]);
-        assert!(should_auto_install_update(&args));
-    }
-
-    #[test]
-    fn auto_install_respects_explicit_disable_even_without_terminal() {
-        let mut args = parse_args(&["jcode", "version"]);
-        args.auto_update = false;
-        assert!(!should_auto_install_update(&args));
-    }
-
-    #[test]
-    fn update_command_still_skips_background_check_before_auto_install_logic() {
-        let args = parse_args(&["jcode", "update"]);
-        assert!(matches!(args.command, Some(Command::Update)));
-        assert!(!should_spawn_background_update_check(&args));
-        assert!(should_auto_install_update(&args));
-    }
 
     #[test]
     fn external_provider_runtimes_register_and_instantiate() {

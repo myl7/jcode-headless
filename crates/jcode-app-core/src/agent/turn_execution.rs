@@ -78,7 +78,6 @@ impl Agent {
         }
 
         self.add_message(Role::User, blocks);
-        crate::telemetry::record_turn();
         self.session.save()?;
         let turn_started_at = Instant::now();
         let start_message_index = self.message_count();

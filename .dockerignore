@@ -6,7 +6,6 @@
 target
 changelog
 docs
-telemetry-worker
 *.log
 *.mp4
 *.gif

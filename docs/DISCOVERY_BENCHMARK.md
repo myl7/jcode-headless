@@ -111,15 +111,8 @@ Every Discovery request from that server carries:
 x-jcode-discovery-benchmark: 1
 ```
 
-Discovery telemetry carries:
-
-```json
-{"benchmark_run": true}
-```
-
-The telemetry worker stores and indexes the flag in
-`discovery_details.benchmark_run`. The discovery service should retain the
-request header with its logs so benchmark requests can also be excluded from
+The discovery service should retain the request header with its logs so
+benchmark requests can be excluded from
 sponsor, billing, and organic-usage reporting.
 
 ## Case design

@@ -731,14 +731,14 @@ pub fn promote_version_to_shared_server(version: &str) -> Result<Option<String>>
 /// `stable` channel rather than pinned to a deliberately-promoted build (e.g. a
 /// local self-dev binary).
 ///
-/// Updates only advance `current`/`stable`, so the long-lived daemon's reload
-/// target (`shared-server`) can drift behind an update. When the channel was
-/// just following stable we want updates to carry it forward automatically;
+/// Stable installs advance `current`/`stable`, so the long-lived daemon's reload
+/// target (`shared-server`) can drift behind an install. When the channel was
+/// just following stable we want installs to carry it forward automatically;
 /// when it was explicitly promoted to a self-dev build we must leave it alone
-/// so an update never silently wipes that build out from under a force reload.
+/// so an install never silently wipes that build out from under a force reload.
 ///
 /// A never-promoted (missing/empty) shared-server marker counts as "tracking":
-/// there is no deliberate build to protect, so it is safe for updates to begin
+/// there is no deliberate build to protect, so it is safe for installs to begin
 /// populating the channel.
 pub fn shared_server_tracks_stable() -> Result<bool> {
     let shared = read_shared_server_version()?;
@@ -755,8 +755,8 @@ pub fn shared_server_tracks_stable() -> Result<bool> {
 /// currently tracking `stable` (see [`shared_server_tracks_stable`]). Returns
 /// `Ok(true)` when the channel was advanced.
 ///
-/// Callers in the update path MUST invoke this *before* moving the `stable`
-/// marker, otherwise the pre-update comparison would always disagree.
+/// Stable installers MUST invoke this *before* moving the `stable` marker,
+/// otherwise the pre-install comparison would always disagree.
 pub fn advance_shared_server_if_tracking_stable(version: &str) -> Result<bool> {
     if shared_server_tracks_stable()? {
         update_shared_server_symlink(version)?;
@@ -784,9 +784,9 @@ pub enum SharedServerRepair {
 /// release so a long-lived daemon can actually reload into a newer binary.
 ///
 /// This is the client-side counterpart to [`advance_shared_server_if_tracking_stable`].
-/// Updates advance `stable` but only advance `shared-server` *during the install
-/// path*; a client that is already on the newest release (so `/update` is a
-/// no-op) never re-runs that install path, leaving a long-lived older daemon
+/// External installs advance `stable` but only advance `shared-server` *during
+/// the install path*. A client started from a replaced image or installation
+/// can therefore find a long-lived older daemon
 /// pinned to its old `shared-server` binary forever. A newer client that detects
 /// an older server calls this to repoint `shared-server` -> `stable` before
 /// asking the server to reload, so the forced reload has a strictly-newer target

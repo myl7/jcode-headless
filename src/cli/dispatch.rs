@@ -12,7 +12,7 @@ use super::args::{
 };
 use crate::{provider_catalog, server, session, startup_profile};
 
-use super::{acp, commands, debug, hot_exec, output, provider_init};
+use super::{acp, commands, debug, output, provider_init};
 use provider_init::ProviderChoice;
 
 fn is_file_controlled_debug_client() -> bool {
@@ -184,9 +184,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
                 ndjson,
             )
             .await?;
-        }
-        Some(Command::Update) => {
-            hot_exec::run_update()?;
         }
         Some(Command::Version { json }) => {
             commands::run_version_command(json)?;
@@ -403,13 +400,13 @@ fn resolve_resume_arg(args: &mut Args) -> Result<()> {
             }
             Err(e) => {
                 match resume_resolution_failure_action(&resume_id, |key| std::env::var_os(key)) {
-                    // During a reload/update/restart handoff the client re-execs
+                    // During a reload/restart handoff the client re-execs
                     // itself with `--resume <id>` and `JCODE_RESUMING=1`. In the
                     // client/server architecture the shared server is the authority
                     // for session lifecycle, so an id that is not in the local store
                     // can still be valid server-side. Hard-exiting here dumped the
                     // user back to a shell with "No session found matching ...",
-                    // making jcode unusable after an auto-update (issue #328).
+                    // making jcode unusable after a reload (issue #328).
                     // Instead, keep the raw id and let the remote connection resolve
                     // it; if the server cannot find it either, the TUI surfaces a
                     // recoverable message and falls back to a fresh session rather

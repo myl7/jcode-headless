@@ -95,7 +95,6 @@ Using improved path-based classification for Rust files:
 | 2437 | `src/tui/ui.rs` |
 | 2397 | `src/memory.rs` |
 | 2365 | `src/provider/mod.rs` |
-| 2217 | `src/telemetry.rs` |
 | 2131 | `src/tui/ui_messages.rs` |
 | 2115 | `src/tui/session_picker.rs` |
 | 2041 | `src/tui/app/inline_interactive.rs` |
@@ -153,7 +152,6 @@ Using improved path-based classification for Rust files:
 | 1125 | `src/tui/app/remote/server_events.rs` |
 | 1124 | `src/tui/app/debug_bench.rs` |
 | 1116 | `src/tui/mermaid.rs` |
-| 1109 | `src/update.rs` |
 | 1094 | `src/server/client_session.rs` |
 | 1093 | `src/provider/openai_stream_runtime.rs` |
 | 1087 | `src/tool/mod.rs` |
@@ -259,7 +257,6 @@ Using improved path-based classification for Rust files:
 | 3 | `src/server/swarm.rs` |
 | 3 | `src/server/client_lifecycle.rs` |
 | 2 | `src/compaction.rs` |
-| 2 | `src/telemetry.rs` |
 | 2 | `src/background.rs` |
 | 2 | `src/auth/oauth.rs` |
 | 2 | `src/provider/dispatch.rs` |
@@ -334,7 +331,6 @@ Using improved path-based classification for Rust files:
 | 277 | `handle_model_command` | `src/tui/app/model_context.rs:862-1138` |
 | 277 | `monitor_bus` | `src/server.rs:1162-1438` |
 | 275 | `display_string` | `src/config.rs:1688-1962` |
-| 267 | `emit_lifecycle_event` | `src/telemetry.rs:1929-2195` |
 | 261 | `prepare_messages_inner` | `src/tui/ui_prepare.rs:300-560` |
 | 261 | `render_mermaid_sized_internal` | `src/tui/mermaid_cache_render.rs:427-687` |
 | 261 | `handle_mouse_event` | `src/tui/app/navigation.rs:683-943` |
@@ -558,4 +554,3 @@ Path-classified counts below are approximate. Inline `#[cfg(test)]` modules insi
 3. move inline tests out of production mega-files where practical
 4. replace easy production `unwrap`/`expect` hotspots with explicit error handling, starting with tool/auth/build modules
 5. continue splitting TUI render and event-handling functions into domain-focused helpers
-

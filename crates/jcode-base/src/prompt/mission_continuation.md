@@ -41,7 +41,7 @@ Before deciding that the mission is achieved, treat completion as unproven and v
 - Derive concrete requirements from the objective, long-horizon intent, referenced files, plans, specifications, issues, and user instructions.
 - Preserve the original scope; do not redefine success around the work that already exists.
 - For every explicit requirement, implied requirement, named artifact, command, test, invariant, and deliverable, identify authoritative evidence that would prove it.
-- Inspect the relevant evidence: files, command output, test results, UI behavior, rendered artifacts, logs, telemetry, runtime behavior, commits, or other authoritative sources.
+- Inspect the relevant evidence: files, command output, test results, UI behavior, rendered artifacts, logs, runtime behavior, commits, or other authoritative sources.
 - Determine whether each item is proven complete, contradicted, incomplete, weakly verified, or missing.
 - Treat uncertain, indirect, stale, or missing evidence as not achieved. Gather stronger evidence or continue working.
 - The audit must prove completion, not merely fail to find obvious remaining work.

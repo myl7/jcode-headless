@@ -10,7 +10,7 @@ pub use jcode_config_types::{
     MarkdownSpacingMode, NamedProviderAuth, NamedProviderConfig, NamedProviderModelConfig,
     NamedProviderType, NativeScrollbarConfig, OverscrollStatusMode, PowerConfig, ProviderConfig,
     ReasoningDisplayMode, SafetyConfig, SponsorsConfig, SwarmSpawnMode, SwarmStripLayout,
-    UpdateChannel, WebSearchConfig, WebSearchEngine,
+    WebSearchConfig, WebSearchEngine,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -150,7 +150,6 @@ const CONFIG_ENV_KEYS: &[&str] = &[
     "JCODE_TOOLS",
     "JCODE_TRUSTED_EXTERNAL_AUTH_SOURCES",
     "JCODE_TYPING_SCROLL_LOCK_TOGGLE_KEY",
-    "JCODE_UPDATE_CHANNEL",
     "JCODE_WEBSEARCH_ENGINE",
     "JCODE_WEBSEARCH_FALLBACK_ENGINES",
     "JCODE_WORKSPACE_DOWN_KEY",

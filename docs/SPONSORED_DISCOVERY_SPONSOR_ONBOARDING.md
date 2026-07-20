@@ -18,17 +18,14 @@ A jcode code change is required when the sponsor needs:
 
 - a new category in `DISCOVERY_CATEGORIES`;
 - a response field the current client does not support;
-- a new setup or provenance mechanism; or
-- different disclosure, privacy, telemetry, or safety behavior.
+- a new setup mechanism; or
+- different disclosure, privacy, or safety behavior.
 
 The hosted catalog and discovery service are not stored in this repository.
 Coordinate that change with the service owner. The client-side contract is in:
 
 - `crates/jcode-app-core/src/tool/discover.rs`;
-- `crates/jcode-base/src/sponsors.rs`;
-- `crates/jcode-base/src/sponsors/provenance.rs`;
-- `crates/jcode-tui/src/tui/app/sponsor_disclosure.rs`; and
-- `TELEMETRY.md`.
+- `crates/jcode-base/src/sponsors.rs`.
 
 ## 1. Intake and approval
 
@@ -103,12 +100,12 @@ Client-visible fields are:
 
 | Field | Required | Rules |
 |-------|----------|-------|
-| `name` | Yes | Stable canonical slug. It is also the sponsor key used by coarse MCP usage metering. |
+| `name` | Yes | Stable canonical slug. |
 | `blurb` | Yes | Short, factual capability description. Do not claim it is "best" or imply endorsement. |
 | `url` | Recommended | HTTPS product or setup page controlled by the vendor. |
 | `setup` | Select phase | Complete instructions returned only after the agent selects the tool. Never include secrets. |
-| `mcp.command` | For MCP provenance | Executable used by `mcp connect`. Must exactly match the eventual connection command. |
-| `mcp.args` | For MCP provenance | Ordered string array. Must exactly match the eventual connection arguments. |
+| `mcp.command` | For MCP setup | Executable used by `mcp connect`. |
+| `mcp.args` | For MCP setup | Ordered argument string array. |
 
 The service may keep operational fields such as `category`, `active`, campaign
 dates, or ordering metadata, but it must not expose private commercial data to
@@ -122,10 +119,8 @@ permissions, and credential flow. Prefer a pinned version in catalog setup
 instructions. If an intentionally floating version is used, document who owns
 continuous monitoring and emergency disablement.
 
-For MCP entries, `mcp.command` and `mcp.args` are security- and
-measurement-sensitive. jcode records discovery provenance only when a later MCP
-connection exactly matches both values. A prose `setup` string alone does not
-enable provenance tagging or coarse usage metering.
+For MCP entries, `mcp.command` and `mcp.args` are security-sensitive. They must
+match the reviewed setup instructions exactly.
 
 ## 4. Implement browse, select, and catalog suggestions
 
@@ -133,15 +128,6 @@ The default client sends `GET https://api.jcode.sh/v1/discovery` with a
 three-second timeout and a 64 KiB maximum response. It sends a
 `User-Agent: jcode/<version>` header and a random
 `x-jcode-discovery-request-id` correlation header.
-
-Current clients also send coarse provenance headers: the random local session
-ID, whether session metadata was available, self-dev/debug/canary flags, tool
-execution mode, build channel, Git-checkout/CI/Cargo-run flags. The service uses
-these signals to classify maintainer alerts as likely-user, self-dev, internal
-test, canary, development, legacy, or unverified traffic. These values are
-client-reported evidence rather than cryptographic proof. They contain no
-transcript content, file paths, account identity, credentials, or user-authored
-text.
 
 Runs launched by `scripts/benchmark_discovery.py` also send
 `x-jcode-discovery-benchmark: 1`. The service must retain that marker with its
@@ -322,8 +308,7 @@ For client-side changes, run at minimum:
 ```bash
 cargo test -p jcode-app-core tool::discover
 cargo test -p jcode-base sponsors
-cargo test -p jcode-base discovery_provenance
-cargo test -p jcode-tui sponsor_disclosure
+cargo test -p jcode-app-core discover
 cargo check -p jcode
 ```
 
@@ -337,9 +322,8 @@ the check.
 3. Publish the entry disabled or outside its campaign window, if supported.
 4. Enable it in production without changing unrelated catalog entries.
 5. Repeat one browse and one select request against production.
-6. Monitor discovery success/failure rates, response size and latency, browse to
-   select behavior, and coarse provenance usage. See `TELEMETRY.md` for the
-   client telemetry boundary.
+6. Monitor discovery-service availability, response size, and latency from the
+   service side.
 7. Re-review setup and destination URLs whenever the vendor changes its package,
    ownership, permissions, or authentication flow.
 

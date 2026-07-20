@@ -15,14 +15,6 @@ pub fn install_panic_hook() {
             return;
         };
 
-        if let Some((provider, model)) = crate::telemetry::current_provider_model() {
-            crate::telemetry::record_crash(
-                &provider,
-                &model,
-                crate::telemetry::SessionEndReason::Panic,
-            );
-        }
-
         if let Ok(mut session) = crate::session::Session::load(&session_id) {
             session.mark_crashed(Some(format!("Panic: {info}")));
             let _ = session.save();

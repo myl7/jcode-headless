@@ -50,7 +50,7 @@ DEFAULT_TIMEOUT_S = 10.0
 class ToolSpec:
     name: str
     argv: list[str]
-    no_telem_env: dict[str, str] | None = None
+    extra_env: dict[str, str] | None = None
     disable_selfdev: bool = False
     input_ready_log_marker: str | None = None
 
@@ -98,8 +98,7 @@ def build_tool_specs() -> list[ToolSpec]:
     specs = [
         ToolSpec(
             name="jcode",
-            argv=["jcode", "--no-update", "--no-selfdev"],
-            no_telem_env={"JCODE_NO_TELEMETRY": "1"},
+            argv=["jcode", "--no-selfdev"],
             disable_selfdev=True,
         ),
         ToolSpec(name="pi", argv=[detect_pi_bin()]),
@@ -111,7 +110,7 @@ def build_tool_specs() -> list[ToolSpec]:
         ToolSpec(
             name="antigravity_cli",
             argv=["agy"],
-            no_telem_env={"AGY_CLI_DISABLE_AUTO_UPDATE": "1"},
+            extra_env={"AGY_CLI_DISABLE_AUTO_UPDATE": "1"},
             input_ready_log_marker="CLI ready for user input",
         ),
     ]
@@ -173,8 +172,8 @@ def run_once(spec: ToolSpec, cwd: Path, timeout_s: float) -> dict[str, object]:
     env = os.environ.copy()
     env["TERM"] = "xterm-256color"
     env["COLORTERM"] = "truecolor"
-    if spec.no_telem_env:
-        env.update(spec.no_telem_env)
+    if spec.extra_env:
+        env.update(spec.extra_env)
     argv = spec.argv
     input_ready_log_path: Path | None = None
     if spec.input_ready_log_marker:

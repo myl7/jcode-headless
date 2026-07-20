@@ -2,8 +2,8 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, ExitStatus};
 
-use crate::bus::{Bus, BusEvent, ClientMaintenanceAction, SessionUpdateStatus};
-use crate::{build, update};
+use crate::build;
+use crate::bus::{Bus, BusEvent, SessionRebuildStatus};
 
 pub fn hot_rebuild(session_id: &str) -> Result<()> {
     let cwd = std::env::current_dir()?;
@@ -11,7 +11,6 @@ pub fn hot_rebuild(session_id: &str) -> Result<()> {
         build::get_repo_dir().ok_or_else(|| anyhow::anyhow!("Could not find jcode repository"))?;
 
     eprintln!("Rebuilding jcode with session {}...", session_id);
-    pull_latest_changes_for_rebuild(&repo_dir);
     run_release_build(&repo_dir)?;
     run_release_tests(&repo_dir)?;
     install_local_release_with_warning(&repo_dir);
@@ -22,19 +21,12 @@ pub fn hot_rebuild(session_id: &str) -> Result<()> {
         anyhow::bail!("Binary not found at {:?}", exe);
     }
 
-    update::print_centered(&format!("Restarting with session {}...", session_id));
+    eprintln!("Restarting with session {}...", session_id);
     exec_rebuilt_session(&exe, session_id, &cwd, is_selfdev)
 }
 
 pub fn spawn_background_session_rebuild(session_id: String) {
     std::thread::spawn(move || run_background_session_rebuild(session_id));
-}
-
-fn pull_latest_changes_for_rebuild(repo_dir: &Path) {
-    eprintln!("Pulling latest changes...");
-    if let Err(e) = update::run_git_pull_ff_only(repo_dir, true) {
-        eprintln!("Warning: {}. Continuing with current version.", e);
-    }
 }
 
 fn run_release_build(repo_dir: &Path) -> Result<()> {
@@ -98,7 +90,6 @@ fn run_background_session_rebuild(session_id: String) {
         return;
     };
 
-    background_pull_latest_changes(&publisher, &repo_dir);
     if !background_release_build(&publisher, &repo_dir) {
         return;
     }
@@ -112,55 +103,38 @@ fn run_background_session_rebuild(session_id: String) {
 #[derive(Clone)]
 struct BackgroundRebuildPublisher {
     session_id: String,
-    action: ClientMaintenanceAction,
 }
 
 impl BackgroundRebuildPublisher {
     fn new(session_id: String) -> Self {
-        Self {
-            session_id,
-            action: ClientMaintenanceAction::Rebuild,
-        }
+        Self { session_id }
     }
 
     fn status(&self, message: impl Into<String>) {
-        self.publish(SessionUpdateStatus::Status {
+        self.publish(SessionRebuildStatus::Status {
             session_id: self.session_id.clone(),
-            action: self.action,
             message: message.into(),
         });
     }
 
     fn error(&self, message: impl Into<String>) {
-        self.publish(SessionUpdateStatus::Error {
+        self.publish(SessionRebuildStatus::Error {
             session_id: self.session_id.clone(),
-            action: self.action,
             message: message.into(),
         });
     }
 
     fn ready(self, repo_dir: &Path) {
-        Bus::global().publish(BusEvent::SessionUpdateStatus(
-            SessionUpdateStatus::ReadyToReload {
+        Bus::global().publish(BusEvent::SessionRebuildStatus(
+            SessionRebuildStatus::ReadyToReload {
                 session_id: self.session_id,
-                action: self.action,
                 version: rebuild_version_label(repo_dir),
             },
         ));
     }
 
-    fn publish(&self, status: SessionUpdateStatus) {
-        Bus::global().publish(BusEvent::SessionUpdateStatus(status));
-    }
-}
-
-fn background_pull_latest_changes(publisher: &BackgroundRebuildPublisher, repo_dir: &Path) {
-    publisher.status("Pulling latest changes in the background...");
-    if let Err(error) = update::run_git_pull_ff_only(repo_dir, true) {
-        publisher.status(format!(
-            "Git pull skipped: {}. Continuing with the current checkout.",
-            error
-        ));
+    fn publish(&self, status: SessionRebuildStatus) {
+        Bus::global().publish(BusEvent::SessionRebuildStatus(status));
     }
 }
 

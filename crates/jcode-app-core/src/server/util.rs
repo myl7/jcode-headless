@@ -176,8 +176,8 @@ fn binary_mtime(path: &Path) -> Option<std::time::SystemTime> {
 /// self-dev `shared-server` build is honored whenever it is at least as fresh as
 /// the other flavor's candidate. The other flavor only wins when it is
 /// *strictly newer*, which is exactly the situation that makes
-/// `server_has_newer_binary` report an update (e.g. `/update` installed a newer
-/// release while the self-dev pin stayed on an older build).
+/// `server_has_newer_binary` report a newer release after an external install
+/// while the self-dev pin stayed on an older build.
 fn newest_reload_candidate(is_selfdev_session: bool) -> Option<(PathBuf, &'static str)> {
     let ordered = [
         server_update_candidate(is_selfdev_session),
@@ -413,8 +413,8 @@ pub(crate) fn server_has_newer_binary() -> bool {
     // installs (channel symlink -> wrapper script -> `.bin` payload) compare the
     // payload that actually runs. Comparing the wrapper script against the
     // running payload compared two different files with unrelated mtimes, which
-    // could report a phantom update forever and wedge clients into an infinite
-    // reload loop right after `/update`.
+    // could report a phantom newer binary forever and wedge clients into an
+    // infinite reload loop right after an external install.
     let current_exe = std::env::current_exe().ok().map(strip_deleted_suffix);
     let current_canonical = current_exe
         .as_ref()
@@ -718,10 +718,10 @@ mod pick_newest_candidate_tests {
 
     #[test]
     fn other_flavor_wins_when_strictly_newer() {
-        // The /update bug: the session's own (self-dev) flavor is pinned to an
+        // The stale-channel bug: the session's own (self-dev) flavor is pinned to an
         // OLD build, but the other (normal) flavor self-healed to a NEWER
         // release. The reload target must follow the newer release so the daemon
-        // can actually apply the update it advertises.
+        // can actually apply the newer binary it advertises.
         let chosen = pick_newest_candidate([
             entry(
                 "/x/versions/old-selfdev/jcode",
@@ -794,8 +794,8 @@ mod pick_newest_candidate_tests {
 mod newest_reload_candidate_integration_tests {
     //! End-to-end-ish coverage that drives `newest_reload_candidate` through the
     //! REAL channel resolution (`build::shared_server_update_candidate`) against
-    //! a temp `JCODE_HOME`. This reproduces the field "/update -> new client,
-    //! stale server" state and proves the fix: a self-dev daemon now reloads into
+    //! a temp `JCODE_HOME`. This reproduces a field "new client, stale server"
+    //! state and proves the fix: a self-dev daemon now reloads into
     //! the freshly installed release instead of its old pinned binary.
     use super::{newer_binary_available, newest_reload_candidate};
     use crate::build;
@@ -829,7 +829,7 @@ mod newest_reload_candidate_integration_tests {
     }
 
     #[test]
-    fn selfdev_daemon_reloads_into_fresh_release_after_update() {
+    fn selfdev_daemon_reloads_into_fresh_release_after_external_install() {
         let _guard = crate::storage::lock_test_env();
         let temp = tempfile::TempDir::new().expect("temp dir");
         let prev_home = std::env::var_os("JCODE_HOME");
@@ -837,7 +837,7 @@ mod newest_reload_candidate_integration_tests {
 
         let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         // Field state: shared-server pinned to an OLD self-dev build; stable
-        // lags. Then `/update` installs a NEWER release and advances
+        // lags. Then an external install provides a NEWER release and advances
         // stable/current (but NOT the pinned shared-server channel).
         let old_selfdev = "3f160da1-dirty-e756d52efca9";
         let new_release = "0.15.0";
@@ -845,8 +845,8 @@ mod newest_reload_candidate_integration_tests {
         install_versioned_binary(new_release, base + Duration::from_secs(60));
 
         build::update_shared_server_symlink(old_selfdev).expect("pin shared-server");
-        build::update_stable_symlink(new_release).expect("stable advanced by update");
-        build::update_current_symlink(new_release).expect("current advanced by update");
+        build::update_stable_symlink(new_release).expect("stable advanced by install");
+        build::update_current_symlink(new_release).expect("current advanced by install");
 
         // The self-dev session's reload target must now be the fresh release, not
         // the stale pinned build. This is the fix.
@@ -927,18 +927,18 @@ mod newest_reload_candidate_integration_tests {
         )
     }
 
-    /// The question that matters for shipped users: after a NORMAL (non-self-dev)
-    /// `/update`, does the long-lived daemon actually advertise + apply the
-    /// upgrade on reconnect?
+    /// The question that matters for shipped users: after a normal external
+    /// install, does the long-lived daemon detect + apply the newer binary on
+    /// reconnect?
     ///
     /// Models a normal install: `shared-server` was tracking `stable`, the daemon
-    /// is running the old release, and `/update` installs a newer release and
+    /// is running the old release, and an external install adds a newer release and
     /// advances stable/current/shared-server. We then drive the REAL
     /// update-detection core and reload-target resolver and assert both:
     /// (1) the daemon reports `server_has_update = true`, and
     /// (2) the binary it reloads into is the freshly installed release.
     #[test]
-    fn normal_user_daemon_detects_and_targets_update_after_update() {
+    fn normal_user_daemon_detects_and_targets_new_binary_after_external_install() {
         let _guard = crate::storage::lock_test_env();
         let temp = tempfile::TempDir::new().expect("temp dir");
         let prev_home = std::env::var_os("JCODE_HOME");
@@ -950,13 +950,13 @@ mod newest_reload_candidate_integration_tests {
         let old_path = install_versioned_binary(old_release, base);
         install_versioned_binary(new_release, base + Duration::from_secs(60));
 
-        // Pre-update state: every channel on the old release (shared-server
+        // Pre-install state: every channel on the old release (shared-server
         // tracking stable). This is the steady state for a normal user.
         build::update_stable_symlink(old_release).expect("stable old");
         build::update_current_symlink(old_release).expect("current old");
         build::update_shared_server_symlink(old_release).expect("shared old");
 
-        // `/update` installs the new release and advances the channels. Because
+        // The external install adds the new release and advances the channels. Because
         // shared-server was tracking stable, it advances too.
         build::advance_shared_server_if_tracking_stable(new_release).expect("advance shared");
         build::update_stable_symlink(new_release).expect("stable new");
@@ -966,7 +966,7 @@ mod newest_reload_candidate_integration_tests {
         // reports server_has_update = true to reconnecting clients.
         assert!(
             daemon_reports_update(&old_path, base),
-            "normal-user daemon should report a server update after /update advanced the channels"
+            "normal-user daemon should report a newer binary after installation advanced the channels"
         );
 
         // (2) The binary it reloads into must be the freshly installed release.
@@ -983,8 +983,8 @@ mod newest_reload_candidate_integration_tests {
 
     /// Install a release-archive-style version dir: a tiny `jcode` wrapper
     /// script plus the real `jcode-linux-x86_64.bin` payload, with independently
-    /// settable mtimes. This is exactly what `/update`'s tar.gz install path
-    /// produces on disk.
+    /// settable mtimes. This is exactly what a release archive install produces
+    /// on disk.
     fn install_release_style_binary(
         version: &str,
         wrapper_mtime: SystemTime,
@@ -1014,7 +1014,7 @@ mod newest_reload_candidate_integration_tests {
         (wrapper, payload)
     }
 
-    /// Regression test for the post-`/update` infinite reload loop: release
+    /// Regression test for the post-install infinite reload loop: release
     /// archives install a wrapper script + `.bin` payload, and the install copy
     /// loop can write the wrapper AFTER the payload. The running daemon's
     /// `current_exe()` is the payload, while the channel candidate resolves to

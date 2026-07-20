@@ -571,7 +571,7 @@ DAG, after which modules peel off bottom-up. Cheapest-first (from the analyzer):
 
 - **1-ref edges (≈24 of them):** e.g. `agent -> tui` (one `write_generated_image_side_panel_page` call),
   `tool -> tui` (one `tui::image::display_image` import), `config -> auth`, `config -> tool`,
-  `telemetry -> cli`, `bus -> provider`, `browser -> provider`. Each is a single call/import that can move
+  `bus -> provider` and `browser -> provider`. Each is a single call/import that can move
   to a shared lower-level crate or be inverted behind a trait/callback.
 - **Mid-weight edges:** `usage -> auth` (4), `tool -> provider` (5), `tool -> server` (5),
   `sidecar -> provider` (7), `agent -> tool` (9), `import -> tui` (9), `usage -> provider` (9).
@@ -582,8 +582,8 @@ DAG, after which modules peel off bottom-up. Cheapest-first (from the analyzer):
 
 1. **Baseline metrics.** Record peak rustc RSS for the largest current unit and full-build wall time
    (`scripts/bench_compile.sh`), so each extraction's memory/compile win is measurable.
-2. **Break the cheap back-edges first.** Eliminate the 1-2 ref couplings (image helpers, single config
-   lookups, telemetry/cli) by moving shared primitives down into existing low-level crates
+2. **Break the cheap back-edges first.** Eliminate the 1-2 ref couplings (image helpers and single config
+   lookups) by moving shared primitives down into existing low-level crates
    (`jcode-core`, `jcode-tui-*`) or inverting them behind small traits. Re-run the analyzer; watch the
    SCC shrink.
 3. **Extract already-clean leaves.** Modules the analyzer marks "extractable now" (no in-root blockers):

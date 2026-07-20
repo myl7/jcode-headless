@@ -7,11 +7,10 @@ This document describes the non-interactive CLI surface intended for wrappers, s
 Use these flags by default in wrappers:
 
 ```bash
-jcode --quiet --no-update --no-selfdev ...
+jcode --quiet --no-selfdev ...
 ```
 
 - `--quiet` suppresses non-error CLI/status chatter
-- `--no-update` avoids update-check noise/work
 - `--no-selfdev` avoids repository auto-detection changing runtime behavior
 
 ## Discover available models

@@ -58,8 +58,6 @@ members = [
     "crates/jcode-task-types",
     "crates/jcode-tool-core",
     "crates/jcode-tool-types",
-    "crates/jcode-update-core",
-    "crates/jcode-telemetry-core",
     "crates/jcode-render-core",
 ]
 
@@ -144,7 +142,6 @@ jcode-provider-anthropic-runtime = { path = "crates/jcode-provider-anthropic-run
 jcode-provider-openai-runtime = { path = "crates/jcode-provider-openai-runtime" }
 jcode-selfdev-types = { path = "crates/jcode-selfdev-types" }
 
-# Archive extraction (for auto-update)
 tempfile = "3"
 
 [features]

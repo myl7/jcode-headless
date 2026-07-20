@@ -44,7 +44,6 @@ impl SpawnedWindowsServer {
         let stderr_file = std::fs::File::create(&stderr_path)?;
         let mut command = Command::new(Self::jcode_binary());
         command
-            .arg("--no-update")
             .arg("--socket")
             .arg(&socket_path)
             .arg("--provider")
@@ -56,7 +55,6 @@ impl SpawnedWindowsServer {
             .env("JCODE_HOME", &home_dir)
             .env("JCODE_RUNTIME_DIR", &runtime_dir)
             .env("JCODE_INSTALL_DIR", &install_dir)
-            .env("JCODE_NO_TELEMETRY", "1")
             .env("JCODE_OPENAI_COMPAT_API_BASE", "http://127.0.0.1:9/v1")
             .env("JCODE_OPENAI_COMPAT_DEFAULT_MODEL", "windows-e2e-model")
             .env("JCODE_OPENAI_COMPAT_LOCAL_ENABLED", "1")
@@ -92,7 +90,6 @@ impl SpawnedWindowsServer {
             .env("JCODE_HOME", &self.home_dir)
             .env("JCODE_RUNTIME_DIR", &self.runtime_dir)
             .env("JCODE_INSTALL_DIR", &self.install_dir)
-            .env("JCODE_NO_TELEMETRY", "1")
             .env("JCODE_OPENAI_COMPAT_API_BASE", "http://127.0.0.1:9/v1")
             .env("JCODE_OPENAI_COMPAT_DEFAULT_MODEL", "windows-e2e-model")
             .env("JCODE_OPENAI_COMPAT_LOCAL_ENABLED", "1")
@@ -118,7 +115,6 @@ impl SpawnedWindowsServer {
         let stderr_file = std::fs::File::create(&stderr_path)?;
         let mut command = Command::new(Self::jcode_binary());
         self.apply_env(&mut command)
-            .arg("--no-update")
             .arg("--socket")
             .arg(&self.socket_path)
             .arg("--provider")
@@ -261,7 +257,6 @@ async fn windows_binary_server_accepts_clients_and_debug_cli() -> Result<()> {
 
         let output = server
             .jcode_command()
-            .arg("--no-update")
             .arg("--socket")
             .arg(&server.socket_path)
             .arg("debug")

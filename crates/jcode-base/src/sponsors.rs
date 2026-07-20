@@ -1,4 +1,4 @@
-//! Partner discovery: shared constants and provenance tracking.
+//! Partner discovery shared constants.
 //!
 //! Partner discovery makes third-party developer tools discoverable to the
 //! agent through the `discover_tools` tool, backed by a hosted manifest. All
@@ -24,10 +24,6 @@
 
 /// Public URL explaining Jcode's tool-provider partnerships.
 pub const DISCOVERY_PARTNERS_URL: &str = "https://jcode.sh/discovery-tools";
-
-/// Provenance tagging and coarse usage metering for MCP servers connected
-/// as a result of a discovery listing.
-pub mod provenance;
 
 /// Internal marker used to render the first discovery disclosure in a session.
 pub const DISCOVERY_DISCLOSURE_TAG: &str = "(partner discovery disclosure)";

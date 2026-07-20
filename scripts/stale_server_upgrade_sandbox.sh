@@ -88,7 +88,7 @@ echo "stable-version:        $(cat "$BUILDS/stable-version")"
 SERVER_PID=""
 cleanup() {
   [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
-  "$NEW_BIN" --no-update server stop >/dev/null 2>&1 || true
+  "$NEW_BIN" server stop >/dev/null 2>&1 || true
   pkill -f "$BUILDS/versions/0.14.6/jcode-linux-x86_64.bin" 2>/dev/null || true
   pkill -f "$BUILDS/versions/0.22.0/jcode" 2>/dev/null || true
   rm -rf "$SANDBOX"
@@ -97,13 +97,13 @@ trap cleanup EXIT
 
 server_version_via_socket() {
   # Ask the running daemon (via the new client's debug surface) its version.
-  "$NEW_BIN" --no-update debug server:info 2>/dev/null \
+  "$NEW_BIN" debug server:info 2>/dev/null \
     | grep -oE '"version":[[:space:]]*"[^"]*"' | head -1
 }
 
 # --- 1) Start the REAL old v0.14.6 daemon ----------------------------------
 log "Starting OLD v0.14.6 daemon"
-"$BUILDS/shared-server/jcode" --no-update --provider antigravity serve \
+"$BUILDS/shared-server/jcode" --provider antigravity serve \
   >"$SANDBOX/server.log" 2>&1 &
 SERVER_PID=$!
 # Wait for the socket to appear.
@@ -119,7 +119,7 @@ echo "server version BEFORE (via socket): ${BEFORE:-<none>}"
 
 # --- 2) New client: jcode server reload (repairs channel, then reloads) ----
 log "Running NEW client: jcode server reload"
-"$NEW_BIN" --no-update server reload 2>&1 | sed 's/^/[server reload] /' || true
+"$NEW_BIN" server reload 2>&1 | sed 's/^/[server reload] /' || true
 echo "shared-server-version after repair: $(cat "$BUILDS/shared-server-version")"
 
 # Give the handoff a moment.

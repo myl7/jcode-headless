@@ -1459,8 +1459,8 @@ pub async fn run_server_reload_command(force: bool, emit_json: bool) -> Result<(
     // Before asking the (possibly older) daemon to reload, repair a stale
     // `shared-server` channel from the client side. The running server resolves
     // its reload target from that channel; if it still points at the server's
-    // own old binary (the "current client, stale server" state, e.g. after a
-    // no-op `/update`), a forced reload would just re-exec the same old binary.
+    // own old binary (the "current client, stale server" state after an
+    // external install), a forced reload would just re-exec the same old binary.
     // Repointing shared-server -> stable when stable is strictly newer gives the
     // reload a newer binary to exec into. Never downgrades; preserves a fresher
     // self-dev pin. Best-effort: a failure here must not block the reload.
@@ -1954,13 +1954,11 @@ fn build_run_todo_validation_message(
     }
 
     if completion_confidence_needs_validation {
-        crate::telemetry::record_todo_gate(crate::telemetry::TodoGateKind::Completion);
         Some((
             crate::todo::TODO_COMPLETION_CONTINUATION_MESSAGE.to_string(),
             false,
         ))
     } else {
-        crate::telemetry::record_todo_gate(crate::telemetry::TodoGateKind::ConfidenceSpike);
         Some((
             crate::todo::TODO_CONFIDENCE_SPIKE_CONTINUATION_MESSAGE.to_string(),
             true,

@@ -2394,7 +2394,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs",
- "flate2",
  "futures",
  "glob",
  "jcode-agent-runtime",
@@ -2416,7 +2415,6 @@ dependencies = [
  "jcode-task-types",
  "jcode-tool-core",
  "jcode-tool-types",
- "jcode-update-core",
  "libc",
  "rand 0.9.3",
  "regex",
@@ -2425,7 +2423,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "similar",
- "tar",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -2501,7 +2498,6 @@ dependencies = [
  "jcode-session-types",
  "jcode-storage",
  "jcode-task-types",
- "jcode-telemetry-core",
  "jcode-tool-core",
  "jcode-tool-types",
  "jcode-usage-types",
@@ -3072,26 +3068,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jcode-telemetry-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "jcode-build-meta",
- "jcode-core",
- "jcode-logging",
- "jcode-provider-core",
- "jcode-selfdev-types",
- "jcode-storage",
- "jcode-usage-types",
- "reqwest 0.12.28",
- "serde_json",
- "tempfile",
- "tokio",
- "uuid",
- "walkdir",
-]
-
-[[package]]
 name = "jcode-tool-core"
 version = "0.1.0"
 dependencies = [
@@ -3109,15 +3085,6 @@ name = "jcode-tool-types"
 version = "0.1.0"
 dependencies = [
  "serde_json",
-]
-
-[[package]]
-name = "jcode-update-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "sha2 0.10.9",
 ]
 
 [[package]]
