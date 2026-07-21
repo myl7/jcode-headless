@@ -1,4 +1,4 @@
-# jcode-headless (fork)
+# jcode-headless
 
 This repository is a fork of [1jehuang/jcode](https://github.com/1jehuang/jcode).
 All of the design, features, and the original README below are the upstream

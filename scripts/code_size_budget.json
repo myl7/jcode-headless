@@ -25,14 +25,14 @@
     "crates/jcode-base/src/skill.rs": 1431,
     "crates/jcode-import-core/src/lib.rs": 1643,
     "crates/jcode-plan/src/lib.rs": 1201,
-    "crates/jcode-protocol/src/wire.rs": 1370,
+    "crates/jcode-protocol/src/wire.rs": 1366,
     "crates/jcode-provider-anthropic-runtime/src/lib.rs": 2450,
     "crates/jcode-provider-bedrock/src/lib.rs": 1983,
     "crates/jcode-provider-core/src/lib.rs": 1641,
     "crates/jcode-provider-openai-runtime/src/lib.rs": 1323,
     "crates/jcode-provider-openai-runtime/src/openai_stream_runtime.rs": 1649,
     "crates/jcode-provider-openrouter-runtime/src/lib.rs": 2756,
-    "src/cli/commands.rs": 1317
+    "src/cli/commands.rs": 1474
   },
   "version": 1
 }
