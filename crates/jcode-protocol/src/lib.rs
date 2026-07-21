@@ -158,8 +158,6 @@ impl AuthChanged {
     }
 }
 
-pub type ReloadRecoverySnapshot = jcode_selfdev_types::ReloadRecoveryDirective;
-
 mod wire;
 pub use wire::TaskGraphNodeSpec;
 pub use wire::{Request, ServerEvent};
@@ -567,7 +565,6 @@ impl Request {
             Request::GetHistory { id } => *id,
             Request::GetModelCatalog { id } => *id,
             Request::GetCompactedHistory { id, .. } => *id,
-            Request::Reload { id, .. } => *id,
             Request::ResumeSession { id, .. } => *id,
             Request::ResumeAllSessions { id } => *id,
             Request::NotifySession { id, .. } => *id,

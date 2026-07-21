@@ -7,7 +7,6 @@ use super::{
     SwarmEvent, SwarmMutationRuntime, SwarmState,
 };
 use crate::agent::Agent;
-use crate::ambient_runner::AmbientRunnerHandle;
 use crate::protocol::ServerEvent;
 use crate::provider::Provider;
 use crate::transport::{Listener, Stream};
@@ -109,7 +108,6 @@ pub(super) struct ServerRuntime {
     server_name: String,
     server_icon: String,
     server_identity: ServerIdentity,
-    ambient_runner: Option<AmbientRunnerHandle>,
     mcp_pool: Arc<OnceCell<Arc<crate::mcp::SharedMcpPool>>>,
     shutdown_signals: Arc<RwLock<HashMap<String, InterruptSignal>>>,
     soft_interrupt_queues: SessionInterruptQueues,
@@ -142,7 +140,6 @@ impl ServerRuntime {
             server_name: server.identity.name.clone(),
             server_icon: server.identity.icon.clone(),
             server_identity: server.identity.clone(),
-            ambient_runner: server.ambient_runner.clone(),
             mcp_pool: Arc::clone(&server.mcp_pool),
             shutdown_signals: Arc::clone(&server.shutdown_signals),
             soft_interrupt_queues: Arc::clone(&server.soft_interrupt_queues),
@@ -167,10 +164,7 @@ impl ServerRuntime {
                 match accepted {
                     Ok((stream, _)) => {
                         runtime.increment_client_count().await;
-                        if !runtime
-                            .spawn_client_task(stream, "Client error", true)
-                            .await
-                        {
+                        if !runtime.spawn_client_task(stream, "Client error").await {
                             runtime.decrement_client_count().await;
                             break;
                         }
@@ -217,17 +211,12 @@ impl ServerRuntime {
         })
     }
 
-    async fn spawn_client_task(
-        &self,
-        stream: Stream,
-        error_prefix: &'static str,
-        nudge_ambient: bool,
-    ) -> bool {
+    async fn spawn_client_task(&self, stream: Stream, error_prefix: &'static str) -> bool {
         let runtime = self.clone();
         self.tasks
             .spawn(move |cancellation| async move {
                 runtime
-                    .run_client_stream(stream, error_prefix, nudge_ambient, cancellation)
+                    .run_client_stream(stream, error_prefix, cancellation)
                     .await;
             })
             .await
@@ -272,7 +261,6 @@ impl ServerRuntime {
         self,
         stream: Stream,
         error_prefix: &'static str,
-        nudge_ambient: bool,
         cancellation: CancellationToken,
     ) {
         let result = {
@@ -319,10 +307,6 @@ impl ServerRuntime {
 
         self.decrement_client_count().await;
 
-        if nudge_ambient && let Some(ref runner) = self.ambient_runner {
-            runner.nudge();
-        }
-
         if let Some(Err(e)) = result {
             crate::logging::error(&format!("{}: {}", error_prefix, e));
         }
@@ -359,7 +343,6 @@ impl ServerRuntime {
                 self.swarm_event_tx.clone(),
                 self.server_identity.clone(),
                 server_start_time,
-                self.ambient_runner.clone(),
                 mcp_pool,
                 Arc::clone(&self.shutdown_signals),
                 Arc::clone(&self.soft_interrupt_queues),

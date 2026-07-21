@@ -198,7 +198,6 @@ fn coordinator_identity(
         model: model.map(str::to_string),
         provider_key: provider_key.map(str::to_string),
         route_api_method: route_api_method.map(str::to_string),
-        is_canary: false,
     }
 }
 

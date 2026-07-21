@@ -636,7 +636,7 @@ pub struct HooksConfig {
     /// before the model starts generating). Fires before the first `pre_tool`,
     /// so integrations can detect that the agent is actively working even while
     /// it is only thinking/streaming text. Fields: MODEL, SOURCE
-    /// ("chat"/"resume"/"ambient"). Env override: JCODE_HOOK_TURN_START.
+    /// ("chat"/"resume"). Env override: JCODE_HOOK_TURN_START.
     pub turn_start: Option<String>,
     /// Runs when an agent turn completes.
     /// Fields: STATUS ("ok"/"error"), DURATION_MS, MODEL, LAST_ASSISTANT_TEXT.
@@ -685,36 +685,6 @@ pub struct AutoReviewConfig {
     pub enabled: bool,
     /// Optional model override for autoreview reviewer sessions.
     pub model: Option<String>,
-}
-
-/// Tool partner discovery configuration.
-///
-/// Partner discovery makes third-party developer tools discoverable to the
-/// agent via a `discover_tools` tool backed by a hosted directory. Some
-/// partners may share revenue with Jcode when a referred user becomes a
-/// customer, but partnership status never influences recommendations. Each
-/// session's first use of `discover_tools` shows a concise disclosure with a
-/// learn-more link.
-/// See <https://jcode.sh/discovery-tools>.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SponsorsConfig {
-    /// Enable tool partner discovery. Enabled by default; set to false to opt
-    /// out. When false, no discovery categories are added to the prompt, the
-    /// `discover_tools` tool is not registered, and jcode never contacts the
-    /// discovery endpoint.
-    pub enabled: bool,
-    /// Base URL of the discovery endpoint.
-    pub endpoint: String,
-}
-
-impl Default for SponsorsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            endpoint: "https://api.jcode.sh/v1/discovery".to_string(),
-        }
-    }
 }
 
 /// Automatic end-of-turn execution judging configuration.
@@ -1081,166 +1051,6 @@ impl Default for ProviderConfig {
             copilot_premium: None,
             model_picker_providers: None,
             stream_idle_timeout_secs: 180,
-        }
-    }
-}
-
-/// Ambient mode configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct AmbientConfig {
-    /// Enable ambient mode (default: false)
-    pub enabled: bool,
-    /// Provider override (default: auto-select)
-    pub provider: Option<String>,
-    /// Model override (default: provider's strongest)
-    pub model: Option<String>,
-    /// Allow API key usage (default: false, only OAuth)
-    pub allow_api_keys: bool,
-    /// Daily token budget when using API keys
-    pub api_daily_budget: Option<u64>,
-    /// Minimum interval between cycles in minutes (default: 5)
-    pub min_interval_minutes: u32,
-    /// Maximum interval between cycles in minutes (default: 120)
-    pub max_interval_minutes: u32,
-    /// Pause ambient when user has active session (default: true)
-    pub pause_on_active_session: bool,
-    /// Enable proactive work vs garden-only (default: true)
-    pub proactive_work: bool,
-    /// Proactive work branch prefix (default: "ambient/")
-    pub work_branch_prefix: String,
-}
-
-impl Default for AmbientConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            provider: None,
-            model: None,
-            allow_api_keys: false,
-            api_daily_budget: None,
-            min_interval_minutes: 5,
-            max_interval_minutes: 120,
-            pause_on_active_session: true,
-            proactive_work: true,
-            work_branch_prefix: "ambient/".to_string(),
-        }
-    }
-}
-
-/// Safety system & notification configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SafetyConfig {
-    /// ntfy.sh topic name (required for push notifications)
-    pub ntfy_topic: Option<String>,
-    /// ntfy.sh server URL (default: https://ntfy.sh)
-    pub ntfy_server: String,
-    /// Enable email notifications (default: false)
-    pub email_enabled: bool,
-    /// Email recipient
-    pub email_to: Option<String>,
-    /// SMTP host (e.g. smtp.gmail.com)
-    pub email_smtp_host: Option<String>,
-    /// SMTP port (default: 587)
-    pub email_smtp_port: u16,
-    /// Email sender address
-    pub email_from: Option<String>,
-    /// SMTP password (prefer JCODE_SMTP_PASSWORD env var)
-    pub email_password: Option<String>,
-    /// IMAP host for receiving email replies (e.g. imap.gmail.com)
-    pub email_imap_host: Option<String>,
-    /// IMAP port (default: 993)
-    pub email_imap_port: u16,
-    /// Enable email reply → agent directive feature (default: false)
-    pub email_reply_enabled: bool,
-    /// Enable Telegram notifications (default: false)
-    pub telegram_enabled: bool,
-    /// Telegram bot token (from @BotFather)
-    pub telegram_bot_token: Option<String>,
-    /// Telegram chat ID to send messages to
-    pub telegram_chat_id: Option<String>,
-    /// Enable Telegram reply → agent directive feature (default: false)
-    pub telegram_reply_enabled: bool,
-    /// Enable Discord notifications (default: false)
-    pub discord_enabled: bool,
-    /// Discord bot token
-    pub discord_bot_token: Option<String>,
-    /// Discord channel ID to send messages to
-    pub discord_channel_id: Option<String>,
-    /// Discord bot user ID (for filtering own messages in polling)
-    pub discord_bot_user_id: Option<String>,
-    /// Enable Discord reply → agent directive feature (default: false)
-    pub discord_reply_enabled: bool,
-    /// Enable the Jade cloud relay channel (remote control via cloud mailbox, default: false)
-    pub jade_relay_enabled: bool,
-    /// Jade relay API base URL (e.g. https://...lambda-url.us-east-1.on.aws/)
-    pub jade_relay_api_base: Option<String>,
-    /// Jade relay bearer token (prefer JCODE_JADE_RELAY_TOKEN env var)
-    pub jade_relay_token: Option<String>,
-    /// Jade relay token id header (x-jade-token-id), used for fast token lookup
-    pub jade_relay_token_id: Option<String>,
-    /// Jade relay user id (channel scope; defaults to the token's user when omitted)
-    pub jade_relay_user_id: Option<String>,
-    /// Jade relay session id to bind this laptop's listener to (the channel = user_id/session_id)
-    pub jade_relay_session_id: Option<String>,
-    /// Enable Jade relay prompt → agent directive feature (default: false)
-    pub jade_relay_reply_enabled: bool,
-}
-
-impl Default for SafetyConfig {
-    fn default() -> Self {
-        Self {
-            ntfy_topic: None,
-            ntfy_server: "https://ntfy.sh".to_string(),
-            email_enabled: false,
-            email_to: None,
-            email_smtp_host: None,
-            email_smtp_port: 587,
-            email_from: None,
-            email_password: None,
-            email_imap_host: None,
-            email_imap_port: 993,
-            email_reply_enabled: false,
-            telegram_enabled: false,
-            telegram_bot_token: None,
-            telegram_chat_id: None,
-            telegram_reply_enabled: false,
-            discord_enabled: false,
-            discord_bot_token: None,
-            discord_channel_id: None,
-            discord_bot_user_id: None,
-            discord_reply_enabled: false,
-            jade_relay_enabled: false,
-            jade_relay_api_base: None,
-            jade_relay_token: None,
-            jade_relay_token_id: None,
-            jade_relay_user_id: None,
-            jade_relay_session_id: None,
-            jade_relay_reply_enabled: false,
-        }
-    }
-}
-
-/// Power-management configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PowerConfig {
-    /// Prevent automatic system sleep while any jcode session is actively
-    /// streaming/processing. Linux also asks logind to block lid-switch suspend.
-    /// Windows cannot override a user-initiated lid close or power-button action;
-    /// those remain controlled by the active Windows power plan. The display is
-    /// still allowed to sleep. Default: true.
-    ///
-    /// Honored by the shared `jcode serve` daemon. The `JCODE_DISABLE_POWER_INHIBIT`
-    /// environment variable forces this off regardless of the config value.
-    pub prevent_sleep_while_streaming: bool,
-}
-
-impl Default for PowerConfig {
-    fn default() -> Self {
-        Self {
-            prevent_sleep_while_streaming: true,
         }
     }
 }

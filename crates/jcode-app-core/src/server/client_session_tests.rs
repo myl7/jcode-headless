@@ -1,11 +1,8 @@
 use super::{
-    claim_live_target_agent, handle_clear_session, handle_reload, handle_resume_session,
-    handle_subscribe, mark_remote_reload_started, remove_detached_source_if_unclaimed,
-    rename_shutdown_signal, rename_swarm_member_session, restored_session_was_interrupted,
-    session_was_interrupted_by_reload, subscribe_should_mark_ready,
+    claim_live_target_agent, handle_clear_session, handle_resume_session, handle_subscribe,
+    remove_detached_source_if_unclaimed, rename_swarm_member_session, subscribe_should_mark_ready,
 };
 use crate::agent::Agent;
-use crate::message::ContentBlock;
 use crate::message::{Message, ToolDefinition};
 use crate::protocol::ServerEvent;
 use crate::provider::{EventStream, Provider};
@@ -157,26 +154,6 @@ impl Provider for MockProvider {
     }
 }
 
-fn test_agent(messages: Vec<crate::session::StoredMessage>) -> Agent {
-    let provider: Arc<dyn Provider> = Arc::new(MockProvider);
-    let rt = tokio::runtime::Runtime::new().expect("runtime");
-    let _guard = rt.enter();
-    let registry = rt.block_on(Registry::new(provider.clone()));
-    build_test_agent(provider, registry, messages)
-}
-
-fn build_test_agent(
-    provider: Arc<dyn Provider>,
-    registry: Registry,
-    messages: Vec<crate::session::StoredMessage>,
-) -> Agent {
-    let mut session =
-        crate::session::Session::create_with_id("session_test_reload".to_string(), None, None);
-    session.model = Some("mock".to_string());
-    session.replace_messages(messages);
-    Agent::new_with_session(provider, registry, session, None)
-}
-
 fn build_test_agent_with_id(
     provider: Arc<dyn Provider>,
     registry: Registry,
@@ -310,7 +287,5 @@ async fn live_target_claim_is_atomic_with_detached_source_cleanup() {
 
 #[path = "client_session_tests/clear.rs"]
 mod clear_tests;
-#[path = "client_session_tests/reload.rs"]
-mod reload_tests;
 #[path = "client_session_tests/resume.rs"]
 mod resume_tests;

@@ -772,18 +772,6 @@ Install-JcodeLauncher -SourcePath $StableBin -LauncherPath $LauncherPath | Out-N
     Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Gracefully reload any running background server onto the freshly installed
-# binary (issue #291). `server reload` only reloads a genuinely-older daemon,
-# hands its live sessions to the new process, and is a no-op when nothing is
-# running, so it is safe to call unconditionally. Best-effort: never fail the
-# install over it.
-if ($env:JCODE_SKIP_SERVER_RELOAD -ne "1") {
-    try {
-        & $LauncherPath server reload 2>$null | Out-Null
-    } catch {
-    }
-}
-
 $userPathUpdate = Set-JcodeUserPath -InstallDir $InstallDir
 if ($userPathUpdate.Changed) {
     Write-Info "Updated user PATH with $InstallDir"

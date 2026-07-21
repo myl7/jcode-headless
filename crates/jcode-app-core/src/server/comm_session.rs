@@ -119,7 +119,6 @@ pub(super) struct CoordinatorSpawnIdentity {
     pub model: Option<String>,
     pub provider_key: Option<String>,
     pub route_api_method: Option<String>,
-    pub is_canary: bool,
 }
 
 /// The resolved model + auth route a spawned swarm agent should be created
@@ -151,7 +150,6 @@ async fn resolve_coordinator_spawn_identity(
             model: Some(agent_guard.provider_model()),
             provider_key: agent_guard.session_provider_key(),
             route_api_method: agent_guard.session_route_api_method(),
-            is_canary: agent_guard.is_canary(),
         };
     }
 
@@ -163,15 +161,10 @@ async fn resolve_coordinator_spawn_identity(
                 model: session.model.clone(),
                 provider_key: session.provider_key.clone(),
                 route_api_method: session.route_api_method.clone(),
-                is_canary: session.is_canary,
             };
             crate::logging::info(&format!(
-                "Swarm spawn: coordinator {} agent busy/unavailable, inheriting identity from persisted session (model={:?} provider_key={:?} route={:?} canary={})",
-                req_session_id,
-                identity.model,
-                identity.provider_key,
-                identity.route_api_method,
-                identity.is_canary,
+                "Swarm spawn: coordinator {} agent busy/unavailable, inheriting identity from persisted session (model={:?} provider_key={:?} route={:?})",
+                req_session_id, identity.model, identity.provider_key, identity.route_api_method,
             ));
             identity
         }
@@ -334,7 +327,6 @@ pub(super) async fn spawn_swarm_agent(
     let resolved_working_dir =
         resolve_spawn_working_dir(working_dir, req_session_id, sessions, swarm_members).await;
     let coordinator = resolve_coordinator_spawn_identity(req_session_id, sessions).await;
-    let coordinator_is_canary = coordinator.is_canary;
     let agents_config = &crate::config::config().agents;
     let configured_swarm_model = agents_config.swarm_model.clone();
     let selection = resolve_swarm_spawn_selection(
@@ -382,7 +374,6 @@ pub(super) async fn spawn_swarm_agent(
         swarm_coordinators,
         swarm_plans,
         soft_interrupt_queues,
-        coordinator_is_canary,
         spawn_model.clone(),
         spawn_provider_key.clone(),
         spawn_route_api_method.clone(),

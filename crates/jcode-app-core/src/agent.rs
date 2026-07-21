@@ -22,7 +22,6 @@ use self::tools::{
     tool_output_side_pane_images, tool_output_to_content_blocks,
 };
 use self::utils::trace_enabled;
-use crate::build;
 use crate::bus::{Bus, BusEvent, SubagentStatus, ToolEvent, ToolStatus};
 use crate::cache_tracker::CacheTracker;
 use crate::compaction::CompactionEvent;
@@ -52,17 +51,12 @@ pub use jcode_agent_runtime::{
     SoftInterruptQueue, SoftInterruptSource, StreamError,
 };
 
-const JCODE_NATIVE_TOOLS: &[&str] = &["selfdev", "communicate"];
+const JCODE_NATIVE_TOOLS: &[&str] = &["communicate"];
 static RECOVERED_TEXT_WRAPPED_TOOL_CALLS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 static JCODE_REPO_SOURCE_STATE: LazyLock<(Option<String>, Option<bool>)> = LazyLock::new(|| {
-    crate::build::get_repo_dir()
-        .map(|repo_dir| {
-            (
-                build::current_git_hash(&repo_dir).ok(),
-                build::is_working_tree_dirty(&repo_dir).ok(),
-            )
-        })
+    self::utils::git_state_for_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+        .map(|state| (state.head, state.dirty))
         .unwrap_or((None, None))
 });
 static WORKING_GIT_STATE_CACHE: LazyLock<StdMutex<HashMap<PathBuf, Option<GitState>>>> =
@@ -231,8 +225,6 @@ pub struct Agent {
     /// MCP tools to wait for), this is set so the per-turn registry scan stops.
     /// Reset whenever the tool list is intentionally unlocked.
     mcp_late_register_resolved: bool,
-    /// Override system prompt (used by ambient mode to inject a custom prompt)
-    system_prompt_override: Option<String>,
     /// Whether memory features are enabled for this session
     memory_enabled: bool,
     /// One-step undo snapshot captured before the most recent rewind.
@@ -295,7 +287,6 @@ impl Agent {
             last_usage: TokenUsage::default(),
             locked_tools: None,
             mcp_late_register_resolved: false,
-            system_prompt_override: None,
             memory_enabled: crate::config::config().features.memory,
             rewind_undo_snapshot: None,
             stdin_request_tx: None,

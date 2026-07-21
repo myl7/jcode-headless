@@ -14,7 +14,6 @@ use crate::message::{Message, Role, StreamEvent, ToolDefinition};
 use crate::protocol::{NotificationType, ServerEvent};
 use crate::provider::{EventStream, Provider};
 use crate::tool::Registry;
-use crate::tool::selfdev::ReloadContext;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -647,7 +646,7 @@ async fn background_task_progress_notifies_attached_clients() {
     clippy::await_holding_lock,
     reason = "test intentionally serializes process-wide JCODE_HOME/env state across async recovery assertions"
 )]
-async fn startup_recovery_resumes_interrupted_headless_sessions_after_reload() -> Result<()> {
+async fn startup_recovery_resumes_interrupted_headless_sessions_after_restart() -> Result<()> {
     let _storage_guard = crate::storage::lock_test_env();
     let temp = tempfile::TempDir::new()?;
     let _env = configure_test_env(&temp);
@@ -655,50 +654,40 @@ async fn startup_recovery_resumes_interrupted_headless_sessions_after_reload() -
     let provider = Arc::new(StreamingMockProvider::default());
     for _ in 0..2 {
         provider.queue_response(vec![
-            StreamEvent::TextDelta("continued after reload".to_string()),
+            StreamEvent::TextDelta("continued after restart".to_string()),
             StreamEvent::MessageEnd { stop_reason: None },
         ]);
     }
 
     let mut initiator = crate::session::Session::create(None, Some("initiator".to_string()));
-    initiator.set_canary("self-dev");
     initiator.add_message(
         Role::User,
-        vec![crate::message::ContentBlock::ToolResult {
-            tool_use_id: "tool_reload".to_string(),
-            content: "Reload initiated. Process restarting...".to_string(),
-            is_error: Some(false),
+        vec![crate::message::ContentBlock::Text {
+            text: "continue the interrupted task".to_string(),
+            cache_control: None,
         }],
     );
+    initiator.mark_crashed(Some("process exited".to_string()));
     initiator.save()?;
-
-    ReloadContext {
-        task_context: Some("Verify multi-session reload recovery".to_string()),
-        version_before: "old-build".to_string(),
-        version_after: "new-build".to_string(),
-        session_id: initiator.id.clone(),
-        timestamp: "2026-04-19T00:00:00Z".to_string(),
-    }
-    .save()?;
 
     let mut peer = crate::session::Session::create(None, Some("peer".to_string()));
     peer.add_message(
         Role::User,
-        vec![crate::message::ContentBlock::ToolResult {
-            tool_use_id: "tool_bash".to_string(),
-            content: "[Tool 'bash' interrupted by server reload after 0.2s]".to_string(),
-            is_error: Some(true),
+        vec![crate::message::ContentBlock::Text {
+            text: "finish the pending work".to_string(),
+            cache_control: None,
         }],
     );
+    peer.mark_crashed(Some("process exited".to_string()));
     peer.save()?;
 
-    let swarm_id = "swarm-reload-recovery";
+    let swarm_id = "swarm-restart-recovery";
     persist_swarm_state_snapshot(
         swarm_id,
         None,
         None,
         &[
-            persisted_headless_member(&initiator.id, swarm_id, "running", "selfdev reload"),
+            persisted_headless_member(&initiator.id, swarm_id, "running", "pending task"),
             persisted_headless_member(&peer.id, swarm_id, "running", "bash tool"),
         ],
     );
@@ -740,14 +729,18 @@ async fn startup_recovery_resumes_interrupted_headless_sessions_after_reload() -
                 let guard = initiator_agent.lock().await;
                 guard.messages().iter().any(|message| {
                     message.role == Role::Assistant
-                        && message.content_preview().contains("continued after reload")
+                        && message
+                            .content_preview()
+                            .contains("continued after restart")
                 })
             };
             let peer_done = {
                 let guard = peer_agent.lock().await;
                 guard.messages().iter().any(|message| {
                     message.role == Role::Assistant
-                        && message.content_preview().contains("continued after reload")
+                        && message
+                            .content_preview()
+                            .contains("continued after restart")
                 })
             };
             let statuses_ready = {
@@ -767,114 +760,7 @@ async fn startup_recovery_resumes_interrupted_headless_sessions_after_reload() -
         }
     })
     .await
-    .expect("headless reload recovery should resume both sessions");
-
-    assert!(
-        ReloadContext::peek_for_session(&initiator.id)?.is_none(),
-        "initiator reload context should be consumed by headless recovery"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-#[allow(
-    clippy::await_holding_lock,
-    reason = "test intentionally serializes process-wide JCODE_HOME/env state across async recovery assertions"
-)]
-async fn startup_recovery_preserves_headed_session_reload_context_for_later_reconnect() -> Result<()>
-{
-    let _storage_guard = crate::storage::lock_test_env();
-    let temp = tempfile::TempDir::new()?;
-    let _env = configure_test_env(&temp);
-
-    let provider = Arc::new(StreamingMockProvider::default());
-    provider.queue_response(vec![
-        StreamEvent::TextDelta("continued after reload".to_string()),
-        StreamEvent::MessageEnd { stop_reason: None },
-    ]);
-
-    let mut headless = crate::session::Session::create(None, Some("headless".to_string()));
-    headless.add_message(
-        Role::User,
-        vec![crate::message::ContentBlock::ToolResult {
-            tool_use_id: "tool_bash".to_string(),
-            content: "[Tool 'bash' interrupted by server reload after 0.2s]".to_string(),
-            is_error: Some(true),
-        }],
-    );
-    headless.save()?;
-
-    ReloadContext {
-        task_context: Some("resume headless worker".to_string()),
-        version_before: "old-headless".to_string(),
-        version_after: "new-headless".to_string(),
-        session_id: headless.id.clone(),
-        timestamp: "2026-04-19T00:00:00Z".to_string(),
-    }
-    .save()?;
-
-    let headed_session_id = crate::id::new_id("headed-reconnect");
-    ReloadContext {
-        task_context: Some("resume headed reconnecting session".to_string()),
-        version_before: "old-headed".to_string(),
-        version_after: "new-headed".to_string(),
-        session_id: headed_session_id.clone(),
-        timestamp: "2026-04-19T00:00:01Z".to_string(),
-    }
-    .save()?;
-
-    let swarm_id = "swarm-reload-headed-mixed";
-    persist_swarm_state_snapshot(
-        swarm_id,
-        None,
-        None,
-        &[persisted_headless_member(
-            &headless.id,
-            swarm_id,
-            "running",
-            "bash tool",
-        )],
-    );
-
-    let server = Server::new(provider.clone());
-    server.recover_headless_sessions_on_startup().await;
-
-    timeout(Duration::from_secs(5), async {
-        loop {
-            let sessions = server.sessions.read().await;
-            let Some(headless_agent) = sessions.get(&headless.id).cloned() else {
-                drop(sessions);
-                tokio::time::sleep(Duration::from_millis(25)).await;
-                continue;
-            };
-            drop(sessions);
-
-            let headless_done = {
-                let guard = headless_agent.lock().await;
-                guard.messages().iter().any(|message| {
-                    message.role == Role::Assistant
-                        && message.content_preview().contains("continued after reload")
-                })
-            };
-            if headless_done {
-                break;
-            }
-
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await
-    .expect("headless reload recovery should complete");
-
-    assert!(
-        ReloadContext::peek_for_session(&headless.id)?.is_none(),
-        "headless session reload context should be consumed by startup recovery"
-    );
-    assert!(
-        ReloadContext::peek_for_session(&headed_session_id)?.is_some(),
-        "headed reconnecting session reload context should remain available for later reconnect"
-    );
+    .expect("headless restart recovery should resume both sessions");
 
     Ok(())
 }

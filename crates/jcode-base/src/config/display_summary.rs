@@ -21,13 +21,7 @@ impl Config {
              - disabled: {disabled_tools}\n\n\
              Agents:\n\
              - swarm model: {swarm_model}\n\
-             - memory: {memory}\n\
-             - ambient: {ambient}\n\n\
-             Notifications:\n\
-             - email: {email}\n\
-             - ntfy: {ntfy}\n\
-             - Telegram: {telegram}\n\
-             - Discord: {discord}\n\n\
+             - memory: {memory}\n\n\
              Set environment variables or edit the config file to customize the runtime.",
             provider = self.provider.default_provider.as_deref().unwrap_or("auto"),
             model = self
@@ -53,31 +47,6 @@ impl Config {
                 .as_deref()
                 .unwrap_or("inherit current session"),
             memory = if self.features.memory {
-                "enabled"
-            } else {
-                "disabled"
-            },
-            ambient = if self.ambient.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            },
-            email = if self.safety.email_enabled {
-                self.safety.email_to.as_deref().unwrap_or("enabled")
-            } else {
-                "disabled"
-            },
-            ntfy = if self.safety.ntfy_topic.is_some() {
-                "enabled"
-            } else {
-                "disabled"
-            },
-            telegram = if self.safety.telegram_enabled {
-                "enabled"
-            } else {
-                "disabled"
-            },
-            discord = if self.safety.discord_enabled {
                 "enabled"
             } else {
                 "disabled"

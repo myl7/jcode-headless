@@ -342,12 +342,12 @@ async fn tasks_map_prunes_entry_after_natural_completion() -> Result<()> {
 }
 
 #[tokio::test]
-async fn reconcile_marks_orphan_from_reloaded_process_failed() -> Result<()> {
+async fn reconcile_marks_same_pid_different_instance_orphan_failed() -> Result<()> {
     let tmp = tempdir()?;
     let manager = BackgroundTaskManager::with_output_dir(tmp.path().to_path_buf());
 
-    // Same PID, different instance token: exactly what an exec-based server
-    // reload leaves behind.
+    // Same PID, different instance token: a status file left behind by an
+    // earlier process image whose PID was reused by this process.
     let mut orphan = running_status_fixture("orphan1aaaa", "session-orphan");
     orphan.owner_pid = Some(std::process::id());
     orphan.owner_instance = Some("previous-process-image".to_string());
@@ -363,8 +363,8 @@ async fn reconcile_marks_orphan_from_reloaded_process_failed() -> Result<()> {
     assert_eq!(status.status, BackgroundTaskStatus::Failed);
     let error = status.error.unwrap_or_default();
     assert!(
-        error.contains("orphaned") && error.contains("reloaded"),
-        "error should explain the reload orphaning, got: {error}"
+        error.contains("orphaned"),
+        "error should explain the orphaning, got: {error}"
     );
     assert!(status.completed_at.is_some());
     Ok(())
@@ -468,97 +468,6 @@ async fn status_read_self_heals_orphaned_task() -> Result<()> {
     assert_eq!(
         wait_result.reason,
         BackgroundTaskWaitReason::AlreadyFinished
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn abort_live_tasks_for_reload_finalizes_running_tasks() -> Result<()> {
-    let tmp = tempdir()?;
-    let manager = BackgroundTaskManager::with_output_dir(tmp.path().to_path_buf());
-
-    // A long-running task that would otherwise vanish across an exec reload.
-    let info = manager
-        .spawn_with_notify(
-            "selfdev-build",
-            Some("selfdev build".to_string()),
-            "session-reload-abort",
-            false,
-            false,
-            |_output_path| async move {
-                sleep(Duration::from_secs(60)).await;
-                Ok(TaskResult::completed(Some(0)))
-            },
-        )
-        .await;
-    assert!(manager.is_live_task(&info.task_id));
-
-    let aborted = manager.abort_live_tasks_for_reload().await;
-    assert_eq!(aborted, 1);
-    assert!(
-        !manager.is_live_task(&info.task_id),
-        "live map should be drained"
-    );
-
-    let status = manager
-        .status(&info.task_id)
-        .await
-        .ok_or_else(|| anyhow!("status should exist"))?;
-    assert_eq!(status.status, BackgroundTaskStatus::Failed);
-    let error = status.error.unwrap_or_default();
-    assert!(
-        error.contains("Interrupted by server reload"),
-        "error should explain the reload interruption, got: {error}"
-    );
-    assert!(status.completed_at.is_some());
-
-    // Idempotent: a second sweep finds nothing.
-    assert_eq!(manager.abort_live_tasks_for_reload().await, 0);
-    Ok(())
-}
-
-#[tokio::test]
-async fn abort_live_tasks_for_reload_keeps_naturally_finished_status() -> Result<()> {
-    let tmp = tempdir()?;
-    let manager = BackgroundTaskManager::with_output_dir(tmp.path().to_path_buf());
-
-    let info = manager
-        .spawn_with_notify(
-            "bash",
-            None,
-            "session-reload-finished",
-            false,
-            false,
-            |_output_path| async move { Ok(TaskResult::completed(Some(0))) },
-        )
-        .await;
-
-    // Let the task finish and write its terminal status.
-    for _ in 0..200 {
-        let status = manager
-            .status(&info.task_id)
-            .await
-            .ok_or_else(|| anyhow!("status should exist"))?;
-        if status.status != BackgroundTaskStatus::Running {
-            break;
-        }
-        sleep(Duration::from_millis(10)).await;
-    }
-
-    assert_eq!(
-        manager.abort_live_tasks_for_reload().await,
-        0,
-        "a naturally completed task should not be counted as finalized"
-    );
-
-    let status = manager
-        .status(&info.task_id)
-        .await
-        .ok_or_else(|| anyhow!("status should exist"))?;
-    assert_eq!(
-        status.status,
-        BackgroundTaskStatus::Completed,
-        "a task that finished before the sweep must keep its real status"
     );
     Ok(())
 }

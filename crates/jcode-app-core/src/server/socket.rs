@@ -211,15 +211,6 @@ pub(super) fn acquire_daemon_lock() -> Result<DaemonLockGuard> {
     })
 }
 
-#[cfg(unix)]
-pub(super) fn mark_close_on_exec<T: std::os::fd::AsRawFd>(io: &T) {
-    let fd = io.as_raw_fd();
-    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-    if flags >= 0 {
-        let _ = unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
-    }
-}
-
 pub fn set_socket_path(path: &str) {
     crate::env::set_var("JCODE_SOCKET", path);
 }

@@ -143,8 +143,6 @@ impl Agent {
 
     /// Clear conversation history
     pub fn clear(&mut self) {
-        let preserve_canary = self.session.is_canary;
-        let preserve_testing_build = self.session.testing_build.clone();
         let preserve_debug = self.session.is_debug;
         let preserve_working_dir = self.session.working_dir.clone();
 
@@ -156,8 +154,6 @@ impl Agent {
         new_session.model = Some(self.provider.model());
         new_session.provider_key =
             crate::session::derive_session_provider_key(self.provider.name());
-        new_session.is_canary = preserve_canary;
-        new_session.testing_build = preserve_testing_build;
         new_session.is_debug = preserve_debug;
         new_session.working_dir = preserve_working_dir;
         new_session.ensure_initial_session_context_message();
@@ -254,28 +250,11 @@ impl Agent {
         }
     }
 
-    pub fn is_canary(&self) -> bool {
-        self.session.is_canary
-    }
-
     pub fn is_debug(&self) -> bool {
         self.session.is_debug
     }
 
-    pub fn set_canary(&mut self, build_hash: &str) {
-        self.session.set_canary(build_hash);
-        if let Err(err) = self.session.save() {
-            logging::error(&format!("Failed to persist canary session state: {}", err));
-        }
-    }
-
     /// Mark this session as a debug/test session
-    /// Set a custom system prompt override (used by ambient mode).
-    /// When set, this replaces the normal system prompt entirely.
-    pub fn set_system_prompt(&mut self, prompt: &str) {
-        self.system_prompt_override = Some(prompt.to_string());
-    }
-
     pub fn set_debug(&mut self, is_debug: bool) {
         self.session.set_debug(is_debug);
         if let Err(err) = self.session.save() {
@@ -331,10 +310,6 @@ impl Agent {
     }
 
     pub(super) async fn tool_definitions(&mut self) -> Vec<ToolDefinition> {
-        if self.session.is_canary {
-            self.registry.register_selfdev_tools().await;
-        }
-
         // Return locked tools if available (prevents cache invalidation from
         // tools arriving asynchronously after the first API request).
         //
@@ -392,31 +367,13 @@ impl Agent {
     }
 
     /// Build the agent's tool definitions from the registry, applying the
-    /// session's `allowed_tools`, `disabled_tools`, and self-dev filters.
+    /// session's `allowed_tools` and `disabled_tools` filters.
     async fn build_filtered_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mut tools = self.registry.definitions(self.allowed_tools.as_ref()).await;
         if !self.disabled_tools.is_empty() {
             tools.retain(|tool| !self.disabled_tools.contains(&tool.name));
         }
-        Self::apply_selfdev_tool_surface(&mut tools, self.session.is_canary);
         tools
-    }
-
-    /// Tailor the `selfdev` tool definition to the session mode.
-    ///
-    /// The registry stores a single shared `selfdev` tool with a default
-    /// (non-self-dev) schema. Self-dev sessions get the full build/test/reload
-    /// surface; every other session keeps the lightweight on-ramp surface
-    /// (`enter`, `setup`, `reload`, `status`, `find-config`). The tool stays
-    /// available in all sessions so the agent can always enter self-dev mode.
-    fn apply_selfdev_tool_surface(tools: &mut [ToolDefinition], is_canary: bool) {
-        for tool in tools.iter_mut() {
-            if tool.name == "selfdev" {
-                tool.description =
-                    crate::tool::selfdev::SelfDevTool::description_for(is_canary).to_string();
-                tool.input_schema = crate::tool::selfdev::SelfDevTool::schema_for(is_canary);
-            }
-        }
     }
 
     /// Returns true if the registry contains `mcp__*` tools (subject to the
@@ -443,14 +400,10 @@ impl Agent {
 
     /// Get full tool definitions for debug introspection (bypasses lock)
     pub async fn tool_definitions_for_debug(&self) -> Vec<crate::message::ToolDefinition> {
-        if self.session.is_canary {
-            self.registry.register_selfdev_tools().await;
-        }
         let mut tools = self.registry.definitions(self.allowed_tools.as_ref()).await;
         if !self.disabled_tools.is_empty() {
             tools.retain(|tool| !self.disabled_tools.contains(&tool.name));
         }
-        Self::apply_selfdev_tool_surface(&mut tools, self.session.is_canary);
         tools
     }
 

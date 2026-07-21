@@ -3,8 +3,8 @@
 use super::client_state::{handle_get_history, spawn_model_prefetch_update};
 use super::{
     ClientConnectionInfo, ClientDebugState, FileTouchService, SessionInterruptQueues, SwarmEvent,
-    SwarmMember, SwarmState, VersionedPlan, broadcast_swarm_status, fanout_live_client_event,
-    persist_swarm_state_for, register_background_tool_signal, register_session_event_sender,
+    SwarmMember, SwarmState, VersionedPlan, broadcast_swarm_status, persist_swarm_state_for,
+    register_background_tool_signal, register_session_event_sender,
     register_session_interrupt_queue, remove_background_tool_signal, remove_plan_participant,
     remove_session_channel_subscriptions, remove_session_from_swarm,
     remove_session_interrupt_queue, rename_background_tool_signal, rename_plan_participant,
@@ -12,7 +12,6 @@ use super::{
     unregister_session_event_sender, update_member_status,
 };
 use crate::agent::Agent;
-use crate::message::ContentBlock;
 use crate::protocol::{NotificationType, ServerEvent};
 use crate::provider::Provider;
 use crate::tool::Registry;
@@ -22,35 +21,11 @@ use jcode_agent_runtime::InterruptSignal;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 
 type SessionAgents = Arc<RwLock<HashMap<String, Arc<Mutex<Agent>>>>>;
 type ChannelSubscriptions = Arc<RwLock<HashMap<String, HashMap<String, HashSet<String>>>>>;
-const RELOAD_RESTORE_MARKER_MAX_AGE: Duration = Duration::from_secs(60);
-
-pub(super) fn session_was_interrupted_by_reload(agent: &Agent) -> bool {
-    let messages = agent.messages();
-    let Some(last) = messages.last() else {
-        return false;
-    };
-
-    last.content.iter().any(|block| match block {
-        ContentBlock::Text { text, .. } => {
-            text.ends_with("[generation interrupted - server reloading]")
-        }
-        ContentBlock::ToolResult {
-            content, is_error, ..
-        } => {
-            content == "Reload initiated. Process restarting..."
-                || (is_error.unwrap_or(false)
-                    && (content.contains("interrupted by server reload")
-                        || content.contains("Skipped - server reloading")))
-        }
-        _ => false,
-    })
-}
-
 pub(super) fn restored_session_was_interrupted(
     session_id: &str,
     previous_status: &crate::session::SessionStatus,
@@ -61,29 +36,9 @@ pub(super) fn restored_session_was_interrupted(
         .as_ref()
         .map(|role| *role == crate::message::Role::User)
         .unwrap_or(false);
-    let last_is_reload_interrupted = session_was_interrupted_by_reload(agent);
-    let closed_pending_user_during_reload =
-        matches!(previous_status, crate::session::SessionStatus::Closed)
-            && last_is_user
-            && crate::server::reload_marker_active(RELOAD_RESTORE_MARKER_MAX_AGE);
-
     if last_is_user && matches!(previous_status, crate::session::SessionStatus::Active) {
         crate::logging::info(&format!(
             "Session {} was Active with pending user message - treating as interrupted",
-            session_id
-        ));
-    }
-
-    if last_is_reload_interrupted {
-        crate::logging::info(&format!(
-            "Session {} contains reload interruption markers - will auto-resume",
-            session_id
-        ));
-    }
-
-    if closed_pending_user_during_reload {
-        crate::logging::info(&format!(
-            "Session {} was Closed with a pending user message during a recent reload - treating as interrupted",
             session_id
         ));
     }
@@ -92,17 +47,6 @@ pub(super) fn restored_session_was_interrupted(
         previous_status,
         crate::session::SessionStatus::Crashed { .. }
     ) || (matches!(previous_status, crate::session::SessionStatus::Active) && last_is_user)
-        || last_is_reload_interrupted
-        || closed_pending_user_during_reload
-}
-
-fn mark_remote_reload_started(request_id: &str) {
-    crate::server::write_reload_state(
-        request_id,
-        jcode_build_meta::version(),
-        crate::server::ReloadPhase::Starting,
-        None,
-    );
 }
 
 async fn rename_shutdown_signal(
@@ -125,7 +69,6 @@ async fn rename_shutdown_signal(
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_clear_session(
     id: u64,
-    client_selfdev: bool,
     client_session_id: &mut String,
     client_connection_id: &str,
     agent: &Arc<Mutex<Agent>>,
@@ -155,7 +98,6 @@ pub(super) async fn handle_clear_session(
             ("request_id", id.to_string()),
             ("session_id", old_session_id.clone()),
             ("client_connection_id", client_connection_id.to_string()),
-            ("client_selfdev", client_selfdev.to_string()),
         ],
     );
     let (preserve_debug, working_dir) = {
@@ -178,9 +120,6 @@ pub(super) async fn handle_clear_session(
     );
     let new_id = new_agent.session_id().to_string();
 
-    if client_selfdev {
-        new_agent.set_canary("self-dev");
-    }
     if preserve_debug {
         new_agent.set_debug(true);
     }
@@ -450,35 +389,11 @@ fn apply_or_defer_subscribe_working_dir(
     });
 }
 
-fn apply_or_defer_subscribe_selfdev(agent: &Arc<Mutex<Agent>>, session_id: &str) {
-    if let Ok(mut agent_guard) = agent.try_lock() {
-        if !agent_guard.is_canary() {
-            agent_guard.set_canary("self-dev");
-        }
-        return;
-    }
-
-    let agent = Arc::clone(agent);
-    let session_id = session_id.to_string();
-    tokio::spawn(async move {
-        let mut agent_guard = agent.lock().await;
-        if !agent_guard.is_canary() {
-            agent_guard.set_canary("self-dev");
-        }
-        crate::logging::info(&format!(
-            "Applied deferred self-dev subscribe metadata for session {}",
-            session_id
-        ));
-    });
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_subscribe(
     id: u64,
     subscribe_working_dir: Option<String>,
-    selfdev: Option<bool>,
     register_mcp_tools: bool,
-    client_selfdev: &mut bool,
     client_session_id: &str,
     client_connection_id: &str,
     friendly_name: &Option<String>,
@@ -661,14 +576,6 @@ pub(super) async fn handle_subscribe(
         }
     }
 
-    let should_selfdev = *client_selfdev || matches!(selfdev, Some(true));
-
-    if should_selfdev {
-        *client_selfdev = true;
-        apply_or_defer_subscribe_selfdev(agent, client_session_id);
-        registry.register_selfdev_tools().await;
-    }
-
     let mcp_register_ms = if register_mcp_tools {
         let mcp_register_start = Instant::now();
         // Resolve project-local MCP config against the session working dir,
@@ -700,10 +607,9 @@ pub(super) async fn handle_subscribe(
     };
 
     crate::logging::info(&format!(
-        "[TIMING] handle_subscribe: session={}, working_dir_set={}, selfdev={}, mcp_register={}ms, total={}ms",
+        "[TIMING] handle_subscribe: session={}, working_dir_set={}, mcp_register={}ms, total={}ms",
         client_session_id,
         subscribe_working_dir.is_some(),
-        should_selfdev,
         mcp_register_ms,
         subscribe_start.elapsed().as_millis(),
     ));
@@ -790,99 +696,6 @@ async fn rename_swarm_member_session(
             swarm.insert(new_session_id.to_string());
         }
     }
-}
-
-pub(super) async fn handle_reload(
-    id: u64,
-    force: bool,
-    client_session_id: &str,
-    agent: &Arc<Mutex<Agent>>,
-    swarm_members: &Arc<RwLock<HashMap<String, SwarmMember>>>,
-    client_event_tx: &mpsc::UnboundedSender<ServerEvent>,
-) {
-    // A non-forced reload (e.g. `jcode server reload`) is a graceful upgrade
-    // request: only reload when this server is provably running older code than
-    // an available reload candidate. This keeps us from downgrading a newer
-    // server (such as a self-dev daemon next to an older release client) and
-    // from re-entering the reload-loop family (#277), where a server that merely
-    // "differs" can never make the difference go away by reloading.
-    if !force && !super::server_has_newer_binary() {
-        crate::logging::info(&format!(
-            "handle_reload: skipping non-forced reload for client_session_id={} (no strictly-newer binary)",
-            client_session_id
-        ));
-        // Tell the requester this was a deliberate no-op (not a silent success)
-        // so callers like `jcode server reload` can report "already up to date"
-        // distinctly from an actual reload.
-        let _ = client_event_tx.send(ServerEvent::ReloadProgress {
-            step: "skip".to_string(),
-            message: "Server already running the newest binary; no reload needed.".to_string(),
-            success: Some(true),
-            output: None,
-        });
-        let _ = client_event_tx.send(ServerEvent::Done { id });
-        return;
-    }
-
-    let request_id = crate::id::new_id("reload");
-    mark_remote_reload_started(&request_id);
-
-    let (triggering_session, prefer_selfdev_binary) = match agent.try_lock() {
-        Ok(agent_guard) => (
-            Some(agent_guard.session_id().to_string()),
-            agent_guard.is_canary(),
-        ),
-        Err(_) => {
-            crate::logging::warn(&format!(
-                "SERVER_RELOAD_AGENT_BUSY request_id={} client_session_id={} fallback_triggering_session={} prefer_selfdev_binary=false",
-                request_id, client_session_id, client_session_id
-            ));
-            (Some(client_session_id.to_string()), false)
-        }
-    };
-
-    let live_sessions = {
-        let members = swarm_members.read().await;
-        members
-            .iter()
-            .filter_map(|(session_id, member)| {
-                if member.event_txs.is_empty() {
-                    None
-                } else {
-                    Some(session_id.clone())
-                }
-            })
-            .collect::<Vec<_>>()
-    };
-
-    let mut delivered = 0;
-    for session_id in &live_sessions {
-        delivered += fanout_live_client_event(
-            swarm_members,
-            session_id,
-            ServerEvent::Reloading { new_socket: None },
-        )
-        .await;
-    }
-    if delivered == 0 {
-        let _ = client_event_tx.send(ServerEvent::Reloading { new_socket: None });
-    }
-
-    let hash = jcode_build_meta::git_hash().to_string();
-    let signal_request_id =
-        crate::server::send_reload_signal(hash, triggering_session.clone(), prefer_selfdev_binary);
-
-    crate::logging::info(&format!(
-        "handle_reload: queued reload signal {} from remote client request {} (triggering_session={:?}, prefer_selfdev_binary={}, reload_notified_sessions={}, reload_notified_clients={})",
-        signal_request_id,
-        request_id,
-        triggering_session,
-        prefer_selfdev_binary,
-        live_sessions.len(),
-        delivered
-    ));
-
-    let _ = client_event_tx.send(ServerEvent::Done { id });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1019,7 +832,6 @@ pub(super) async fn handle_resume_session(
     client_instance_id: Option<&str>,
     client_has_local_history: bool,
     allow_session_takeover: bool,
-    client_selfdev: &mut bool,
     client_session_id: &mut String,
     client_connection_id: &str,
     agent: &Arc<Mutex<Agent>>,
@@ -1198,21 +1010,6 @@ pub(super) async fn handle_resume_session(
             client_event_tx.clone(),
         )
         .await;
-
-        let is_canary = live_target_agent
-            .try_lock()
-            .ok()
-            .map(|agent_guard| agent_guard.is_canary())
-            .or_else(|| {
-                crate::session::Session::load_startup_stub(&session_id)
-                    .ok()
-                    .map(|session| session.is_canary)
-            })
-            .unwrap_or(false);
-        if is_canary {
-            *client_selfdev = true;
-            registry.register_selfdev_tools().await;
-        }
 
         *client_session_id = session_id.clone();
 
@@ -1401,15 +1198,9 @@ pub(super) async fn handle_resume_session(
         agent_guard.mark_closed();
     }
 
-    let (result, is_canary) = {
+    let result = {
         let mut agent_guard = agent.lock().await;
-        let result =
-            agent_guard.restore_session_with_working_dir(&session_id, working_dir_override);
-        if *client_selfdev {
-            agent_guard.set_canary("self-dev");
-        }
-        let is_canary = agent_guard.is_canary();
-        (result, is_canary)
+        agent_guard.restore_session_with_working_dir(&session_id, working_dir_override)
     };
 
     let was_interrupted = match &result {
@@ -1419,11 +1210,6 @@ pub(super) async fn handle_resume_session(
         }
         Err(_) => false,
     };
-
-    if result.is_ok() && is_canary {
-        *client_selfdev = true;
-        registry.register_selfdev_tools().await;
-    }
 
     match result {
         Ok(_prev_status) => {

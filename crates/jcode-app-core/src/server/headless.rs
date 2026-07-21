@@ -28,7 +28,6 @@ pub(super) async fn create_headless_session(
     swarm_coordinators: &Arc<RwLock<HashMap<String, String>>>,
     _swarm_plans: &Arc<RwLock<HashMap<String, VersionedPlan>>>,
     soft_interrupt_queues: &SessionInterruptQueues,
-    selfdev_requested: bool,
     model_override: Option<String>,
     provider_key_override: Option<String>,
     route_api_method_override: Option<String>,
@@ -54,10 +53,6 @@ pub(super) async fn create_headless_session(
     let registry = Registry::new(provider.clone()).await;
 
     registry.enable_memory_test_mode().await;
-
-    if selfdev_requested {
-        registry.register_selfdev_tools().await;
-    }
 
     registry
         .register_mcp_tools_for_dir(
@@ -113,10 +108,6 @@ pub(super) async fn create_headless_session(
     }
 
     new_agent.set_debug(true);
-
-    if selfdev_requested {
-        new_agent.set_canary("self-dev");
-    }
 
     {
         let mut current = global_session_id.write().await;
@@ -256,7 +247,6 @@ pub(super) async fn create_headless_session(
         "working_dir": working_dir,
         "swarm_id": swarm_id,
         "friendly_name": friendly_name,
-        "is_canary": selfdev_requested,
     })
     .to_string())
 }

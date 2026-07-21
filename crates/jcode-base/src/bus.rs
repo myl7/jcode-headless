@@ -316,7 +316,6 @@ pub struct ProductivityReportPayload {
 #[derive(Clone, Debug)]
 pub enum SessionRebuildStatus {
     Status { session_id: String, message: String },
-    ReadyToReload { session_id: String, version: String },
     Error { session_id: String, message: String },
 }
 

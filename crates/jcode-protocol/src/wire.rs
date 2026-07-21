@@ -113,8 +113,6 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        selfdev: Option<bool>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
         target_session_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         client_instance_id: Option<String>,
@@ -143,19 +141,6 @@ pub enum Request {
         id: u64,
         /// Number of leading compacted messages the client wants rendered before the live tail.
         visible_messages: usize,
-    },
-
-    /// Trigger server hot reload (build new version, restart)
-    #[serde(rename = "reload")]
-    Reload {
-        id: u64,
-        /// When `true` (the default for backward compatibility), the server
-        /// reloads unconditionally. When `false`, the server only reloads if it
-        /// detects a strictly-newer reload candidate binary, so callers like
-        /// `jcode server reload` can request a graceful upgrade without risking
-        /// a downgrade (e.g. a newer self-dev daemon next to an older release).
-        #[serde(default = "default_true")]
-        force: bool,
     },
 
     /// Resume a specific session by ID
@@ -1075,9 +1060,6 @@ pub enum ServerEvent {
         /// Number of connected clients
         #[serde(skip_serializing_if = "Option::is_none")]
         client_count: Option<usize>,
-        /// Whether this session is in canary/self-dev mode
-        #[serde(skip_serializing_if = "Option::is_none")]
-        is_canary: Option<bool>,
         /// Server binary version string (e.g. "v0.1.123 (abc1234)")
         #[serde(skip_serializing_if = "Option::is_none")]
         server_version: Option<String>,
@@ -1087,15 +1069,9 @@ pub enum ServerEvent {
         /// Server icon for display (e.g. "🔥")
         #[serde(skip_serializing_if = "Option::is_none")]
         server_icon: Option<String>,
-        /// Whether a newer server binary is available on disk
-        #[serde(skip_serializing_if = "Option::is_none")]
-        server_has_update: Option<bool>,
         /// Whether the session was interrupted mid-generation (crashed/disconnected while processing)
         #[serde(skip_serializing_if = "Option::is_none")]
         was_interrupted: Option<bool>,
-        /// Server-owned reload recovery directive for this session, if a reconnect should continue automatically.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        reload_recovery: Option<ReloadRecoverySnapshot>,
         /// Last observed actual connection type for this session (e.g. websocket, https/sse)
         #[serde(skip_serializing_if = "Option::is_none")]
         connection_type: Option<String>,
@@ -1147,29 +1123,6 @@ pub enum ServerEvent {
         compacted_remaining: usize,
         #[serde(default)]
         compacted_hidden_prompts: usize,
-    },
-
-    /// Server is reloading (clients should reconnect)
-    #[serde(rename = "reloading")]
-    Reloading {
-        /// New socket path to connect to (if different)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        new_socket: Option<String>,
-    },
-
-    /// Progress update during server reload
-    #[serde(rename = "reload_progress")]
-    ReloadProgress {
-        /// Step name (e.g., "git_pull", "cargo_build", "exec")
-        step: String,
-        /// Human-readable message
-        message: String,
-        /// Whether this step succeeded (None = in progress)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        success: Option<bool>,
-        /// Output from the step (stdout/stderr)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        output: Option<String>,
     },
 
     /// Model changed (response to cycle_model)

@@ -16,9 +16,7 @@ use super::client_lifecycle_logging::{
 use super::client_lightweight_control::{
     LightweightControlContext, handle_lightweight_control_request, parse_swarm_spawn_mode,
 };
-use super::client_session::{
-    handle_clear_session, handle_reload, handle_resume_session, handle_subscribe,
-};
+use super::client_session::{handle_clear_session, handle_resume_session, handle_subscribe};
 use super::client_state::{
     handle_get_compacted_history, handle_get_history, handle_get_model_catalog, handle_get_state,
 };
@@ -72,7 +70,6 @@ use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 
 type SessionAgents = Arc<RwLock<HashMap<String, Arc<Mutex<Agent>>>>>;
 type ChannelSubscriptions = Arc<RwLock<HashMap<String, HashMap<String, HashSet<String>>>>>;
-const RELOAD_STARTING_GUARD_MAX_AGE: Duration = Duration::from_secs(30);
 const REQUEST_HANDLER_STALL_THRESHOLDS_MS: [u64; 3] = [2_000, 10_000, 60_000];
 
 fn required_subscribe_working_dir(working_dir: Option<&str>) -> std::result::Result<&str, String> {
@@ -241,13 +238,6 @@ fn reject_if_agent_busy_for_request(
         retry_after_secs: Some(1),
     });
     true
-}
-
-fn server_reload_starting() -> bool {
-    matches!(
-        crate::server::recent_reload_state(RELOAD_STARTING_GUARD_MAX_AGE),
-        Some(state) if state.phase == crate::server::ReloadPhase::Starting
-    )
 }
 
 fn compaction_server_event(event: crate::compaction::CompactionEvent) -> ServerEvent {
@@ -459,9 +449,6 @@ pub(super) async fn handle_client(
     let mut processing_message_id: Option<u64> = None;
     let mut processing_session_id: Option<String> = None;
     let mut current_client_instance_id: Option<String> = None;
-    // Client selfdev status is determined by Subscribe request, not server's env
-    let mut client_selfdev = false;
-
     let client_start = std::time::Instant::now();
 
     let provider = provider_template.fork_for_new_session();
@@ -1131,7 +1118,6 @@ pub(super) async fn handle_client(
                 }
                 handle_clear_session(
                     id,
-                    client_selfdev,
                     &mut client_session_id,
                     &client_connection_id,
                     &agent,
@@ -1307,7 +1293,6 @@ pub(super) async fn handle_client(
             Request::Subscribe {
                 id,
                 working_dir: subscribe_working_dir,
-                selfdev,
                 target_session_id,
                 client_instance_id,
                 client_has_local_history,
@@ -1348,7 +1333,6 @@ pub(super) async fn handle_client(
                             client_instance_id.as_deref(),
                             client_has_local_history,
                             allow_session_takeover,
-                            &mut client_selfdev,
                             &mut client_session_id,
                             &client_connection_id,
                             &agent,
@@ -1388,9 +1372,7 @@ pub(super) async fn handle_client(
                             handle_subscribe(
                                 id,
                                 subscribe_working_dir,
-                                selfdev,
                                 false,
-                                &mut client_selfdev,
                                 &client_session_id,
                                 &client_connection_id,
                                 &friendly_name,
@@ -1424,9 +1406,7 @@ pub(super) async fn handle_client(
                         handle_subscribe(
                             id,
                             subscribe_working_dir,
-                            selfdev,
                             true,
-                            &mut client_selfdev,
                             &client_session_id,
                             &client_connection_id,
                             &friendly_name,
@@ -1451,9 +1431,7 @@ pub(super) async fn handle_client(
                     handle_subscribe(
                         id,
                         subscribe_working_dir,
-                        selfdev,
                         true,
-                        &mut client_selfdev,
                         &client_session_id,
                         &client_connection_id,
                         &friendly_name,
@@ -1549,18 +1527,6 @@ pub(super) async fn handle_client(
                 });
             }
 
-            Request::Reload { id, force } => {
-                handle_reload(
-                    id,
-                    force,
-                    &client_session_id,
-                    &agent,
-                    &swarm_members,
-                    &client_event_tx,
-                )
-                .await;
-            }
-
             Request::ResumeSession {
                 id,
                 session_id,
@@ -1586,7 +1552,6 @@ pub(super) async fn handle_client(
                     client_instance_id.as_deref(),
                     client_has_local_history,
                     allow_session_takeover,
-                    &mut client_selfdev,
                     &mut client_session_id,
                     &client_connection_id,
                     &agent,
@@ -2682,15 +2647,6 @@ async fn start_processing_message(
         images,
         system_reminder,
     } = message;
-    if server_reload_starting() {
-        crate::logging::info(&format!(
-            "Rejecting new message for session {} because server reload is starting",
-            client_session_id
-        ));
-        let _ = client_event_tx.send(ServerEvent::Reloading { new_socket: None });
-        return;
-    }
-
     if *state.client_is_processing {
         let _ = client_event_tx.send(ServerEvent::Error {
             id,
@@ -2703,19 +2659,6 @@ async fn start_processing_message(
     *state.client_is_processing = true;
     *state.message_id = Some(id);
     *state.session_id = Some(client_session_id.to_string());
-
-    if let Some(reminder) = system_reminder.as_deref()
-        && let Err(error) = super::reload_recovery::mark_delivered_if_matching_continuation(
-            client_session_id,
-            reminder,
-            "client_message_accepted",
-        )
-    {
-        crate::logging::warn(&format!(
-            "Failed to mark reload recovery intent delivered for accepted message session={} id={}: {}",
-            client_session_id, id, error
-        ));
-    }
 
     update_member_status(
         client_session_id,

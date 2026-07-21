@@ -57,8 +57,6 @@ sha2 = "0.10"
 rand = "0.9.3"
 url = "2"
 jcode-agent-runtime = { path = "../jcode-agent-runtime" }
-jcode-ambient-types = { path = "../jcode-ambient-types" }
-jcode-notify-email = { path = "../jcode-notify-email" }
 jcode-provider-core = { path = "../jcode-provider-core" }
 # NOTE: jcode-app-core does NOT depend on any jcode-tui-* crate. They were
 # unused dead dependency edges here (the TUI declares them itself). Removing
@@ -69,7 +67,6 @@ tokio-stream = "0.1"
 
 # PDF parsing (behind feature flag)
 jcode-pdf = { path = "../jcode-pdf", optional = true }
-jcode-build-support = { path = "../jcode-build-support" }
 jcode-build-meta = { path = "../jcode-build-meta" }
 
 # Foundational layer (provider, auth, config, session, message, memory, ...).
@@ -78,10 +75,8 @@ jcode-build-meta = { path = "../jcode-build-meta" }
 jcode-base = { path = "../jcode-base", default-features = false }
 jcode-core = { path = "../jcode-core" }
 jcode-message-types = { path = "../jcode-message-types" }
-jcode-overnight-core = { path = "../jcode-overnight-core" }
 jcode-plan = { path = "../jcode-plan" }
 jcode-swarm-core = { path = "../jcode-swarm-core" }
-jcode-selfdev-types = { path = "../jcode-selfdev-types" }
 jcode-session-types = { path = "../jcode-session-types" }
 jcode-task-types = { path = "../jcode-task-types" }
 jcode-tool-core = { path = "../jcode-tool-core" }
@@ -99,8 +94,6 @@ jemalloc-prof = ["jcode-base/jemalloc-prof"]
 embeddings = ["jcode-base/embeddings"]
 # live AWS Bedrock support lives in jcode-base (provider/bedrock); forward there.
 bedrock = ["jcode-base/bedrock"]
-# Used only by the CentOS 7 portable Linux release build.
-linux-compat-vendored-openssl = ["jcode-notify-email/linux-compat-vendored-openssl"]
 # PDF text extraction lives in this crate (tool/read.rs).
 pdf = ["dep:jcode-pdf"]
 # Compiles this crate's test-only helpers/accessors (e.g. the

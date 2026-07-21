@@ -1,13 +1,10 @@
 mod agentgrep;
-pub mod ambient;
 mod apply_patch;
 mod bash;
 mod batch;
 mod bg;
 mod communicate;
 mod conversation_search;
-mod debug_socket;
-mod discover;
 mod edit;
 mod gmail;
 mod goal;
@@ -18,7 +15,6 @@ mod memory;
 mod multiedit;
 mod patch;
 mod read;
-pub mod selfdev;
 pub(crate) mod serde_coerce;
 mod session_search;
 pub(crate) mod session_search_index;
@@ -210,8 +206,6 @@ impl Registry {
                 goal::InitiativeTool::new,
             );
             Self::insert_tool_timed(&mut m, &mut timings, "gmail", gmail::GmailTool::new);
-            Self::insert_tool_timed(&mut m, &mut timings, "schedule", ambient::ScheduleTool::new);
-            Self::insert_tool_timed(&mut m, &mut timings, "selfdev", selfdev::SelfDevTool::new);
             let nonzero: Vec<String> = timings
                 .iter()
                 .filter(|(_, ms)| *ms > 0)
@@ -267,16 +261,6 @@ impl Registry {
             "conversation_search",
             conversation_search::ConversationSearchTool::new(compaction),
         );
-        // Sponsored discovery is on by default (opt-out); when disabled the
-        // tool is never registered and no discovery endpoint is ever
-        // contacted.
-        if crate::config::config().sponsors.enabled {
-            Self::insert_tool(
-                &mut tools_map,
-                "discover_tools",
-                discover::DiscoverToolsTool::new(),
-            );
-        }
         let session_tools_ms = session_tools_start.elapsed().as_millis();
 
         let write_start = std::time::Instant::now();
@@ -965,52 +949,6 @@ impl Registry {
                 }
             });
         }
-    }
-
-    /// Register self-dev tools (only for canary/self-dev sessions)
-    pub async fn register_selfdev_tools(&self) {
-        // Self-dev management tool
-        let selfdev_tool = selfdev::SelfDevTool::new();
-        self.register(
-            "selfdev".to_string(),
-            Arc::new(selfdev_tool) as Arc<dyn Tool>,
-        )
-        .await;
-
-        // Debug socket tool for direct debug socket access
-        let debug_socket_tool = debug_socket::DebugSocketTool::new();
-        self.register(
-            "debug_socket".to_string(),
-            Arc::new(debug_socket_tool) as Arc<dyn Tool>,
-        )
-        .await;
-    }
-
-    /// Register ambient-mode tools (only for ambient sessions)
-    pub async fn register_ambient_tools(&self) {
-        self.register(
-            "end_ambient_cycle".to_string(),
-            Arc::new(ambient::EndAmbientCycleTool::new()) as Arc<dyn Tool>,
-        )
-        .await;
-
-        self.register(
-            "schedule_ambient".to_string(),
-            Arc::new(ambient::ScheduleAmbientTool::new()) as Arc<dyn Tool>,
-        )
-        .await;
-
-        self.register(
-            "request_permission".to_string(),
-            Arc::new(ambient::RequestPermissionTool::new()) as Arc<dyn Tool>,
-        )
-        .await;
-
-        self.register(
-            "send_message".to_string(),
-            Arc::new(ambient::SendChannelMessageTool::new()) as Arc<dyn Tool>,
-        )
-        .await;
     }
 
     /// Unregister a tool

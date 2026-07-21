@@ -20,7 +20,6 @@ mod comm_plan;
 mod comm_session;
 mod comm_sync;
 mod debug;
-mod debug_ambient;
 mod debug_command_exec;
 mod debug_events;
 mod debug_help;
@@ -34,10 +33,6 @@ mod headless;
 mod lifecycle;
 mod live_turn;
 mod provider_control;
-mod reload;
-mod reload_recovery;
-mod reload_state;
-mod reload_trace;
 mod runtime;
 mod socket;
 mod swarm;
@@ -56,7 +51,6 @@ use self::background_tasks::{
 use self::debug::{ClientConnectionInfo, ClientDebugState};
 use self::debug_jobs::DebugJob;
 use self::headless::create_headless_session;
-use self::reload::await_reload_signal;
 use self::runtime::ServerRuntime;
 use self::swarm::{
     MAX_SWARM_MEMBERS, broadcast_swarm_plan, broadcast_swarm_plan_with_previous,
@@ -79,7 +73,6 @@ use self::swarm_persistence::{
 };
 use self::util::get_shared_mcp_pool;
 use crate::agent::Agent;
-use crate::ambient_runner::AmbientRunnerHandle;
 use crate::bus::{Bus, BusEvent};
 use crate::protocol::{NotificationType, ServerEvent};
 use crate::provider::Provider;
@@ -89,7 +82,6 @@ use crate::runtime_memory_log::{
     ServerRuntimeMemorySample, ServerRuntimeMemoryServer, ServerRuntimeMemorySessions,
     ServerRuntimeMemoryTopSession,
 };
-use crate::tool::selfdev::ReloadContext;
 use crate::transport::Listener;
 use anyhow::Result;
 use jcode_agent_runtime::{InterruptSignal, SoftInterruptSource};
@@ -327,11 +319,6 @@ fn headless_member_should_restore(status: &str, is_headless: bool) -> bool {
             status,
             "ready" | "completed" | "done" | "failed" | "stopped"
         )
-}
-
-fn headless_reload_continuation_message(reload_ctx: Option<ReloadContext>) -> Option<String> {
-    ReloadContext::recovery_directive(reload_ctx.as_ref(), true, "", None)
-        .map(|directive| directive.continuation_message)
 }
 
 fn configured_server_name(cli_name: Option<String>) -> Option<String> {
@@ -574,31 +561,20 @@ pub use self::state::{
     SwarmState,
 };
 use self::state::{
-    SessionInterruptQueues, fanout_live_client_event, fanout_session_event,
-    queue_soft_interrupt_for_session, register_background_tool_signal,
-    register_session_event_sender, register_session_interrupt_queue, remove_background_tool_signal,
+    SessionInterruptQueues, fanout_session_event, queue_soft_interrupt_for_session,
+    register_background_tool_signal, register_session_event_sender,
+    register_session_interrupt_queue, remove_background_tool_signal,
     remove_session_interrupt_queue, rename_background_tool_signal, rename_session_interrupt_queue,
     session_event_fanout_sender, unregister_session_event_sender,
 };
 pub use crate::plan::{SwarmTaskProgress, VersionedPlan};
 
 pub use self::await_members_state::pending_await_members_for_session;
-use self::reload_state::clear_reload_marker_if_stale_for_pid;
-#[cfg(test)]
-pub(crate) use self::reload_state::subscribe_reload_signal_for_tests;
-pub use self::reload_state::{
-    ReloadAck, ReloadPhase, ReloadSignal, ReloadState, ReloadWaitStatus, acknowledge_reload_signal,
-    await_reload_handoff, clear_reload_marker, inspect_reload_wait_status,
-    publish_reload_socket_ready, recent_reload_state, reload_marker_active, reload_marker_exists,
-    reload_marker_path, reload_process_alive, reload_state_summary, send_reload_signal,
-    wait_for_reload_ack, wait_for_reload_handoff_event, write_reload_marker, write_reload_state,
-};
-
 pub use self::lifecycle::configure_temporary_server;
 #[cfg(unix)]
-pub use self::socket::spawn_server_notify;
+use self::socket::acquire_daemon_lock;
 #[cfg(unix)]
-use self::socket::{acquire_daemon_lock, mark_close_on_exec};
+pub use self::socket::spawn_server_notify;
 pub use self::socket::{
     cleanup_socket_pair, connect_socket, debug_socket_path, has_live_listener, is_server_ready,
     reap_stale_socket_if_dead, set_socket_path, socket_path, wait_for_server_ready,
@@ -606,9 +582,8 @@ pub use self::socket::{
 use self::socket::{signal_ready_fd, socket_has_live_listener};
 
 pub use self::util::ServerIdentity;
-pub(crate) use self::util::server_has_newer_binary;
 use self::util::{
-    debug_control_allowed, embedding_idle_unload_secs, git_common_dir_for, reload_exec_target,
+    debug_control_allowed, embedding_idle_unload_secs, git_common_dir_for,
     startup_headless_recovery_test_delay, swarm_id_for_dir,
 };
 
@@ -685,8 +660,6 @@ pub struct Server {
     event_counter: Arc<std::sync::atomic::AtomicU64>,
     /// Broadcast channel for swarm event subscriptions (debug socket subscribers)
     swarm_event_tx: broadcast::Sender<SwarmEvent>,
-    /// Ambient mode runner handle (None if ambient is disabled)
-    ambient_runner: Option<AmbientRunnerHandle>,
     /// Shared MCP server pool (processes shared across sessions), initialized lazily.
     mcp_pool: Arc<OnceCell<Arc<crate::mcp::SharedMcpPool>>>,
     /// Graceful shutdown signals by session_id (stored outside agent mutex so they
@@ -735,15 +708,6 @@ impl Server {
         };
         crate::process_title::set_server_title(&identity.name);
 
-        // Initialize the background runner even when ambient mode is disabled so
-        // session-targeted scheduled tasks still have a live delivery loop.
-        let ambient_runner = {
-            let safety = Arc::new(crate::safety::SafetySystem::new());
-            let handle = AmbientRunnerHandle::new(safety);
-            crate::tool::ambient::init_schedule_runner(handle.clone());
-            Some(handle)
-        };
-
         let LoadedSwarmRuntimeState {
             plans: restored_swarm_plans,
             coordinators: restored_swarm_coordinators,
@@ -778,7 +742,6 @@ impl Server {
             event_history: Arc::new(RwLock::new(std::collections::VecDeque::new())),
             event_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             swarm_event_tx: broadcast::channel(256).0,
-            ambient_runner,
             mcp_pool: Arc::new(OnceCell::new()),
             shutdown_signals: Arc::new(RwLock::new(HashMap::new())),
             soft_interrupt_queues: Arc::new(RwLock::new(HashMap::new())),
@@ -904,9 +867,6 @@ impl Server {
             let previous_status = session.status.clone();
             let provider = self.provider.fork();
             let registry = crate::tool::Registry::new(provider.clone()).await;
-            if session.is_canary {
-                registry.register_selfdev_tools().await;
-            }
             registry
                 .register_mcp_tools_for_dir(
                     None,
@@ -941,14 +901,7 @@ impl Server {
                 register_background_tool_signal(&session_id, agent_guard.background_tool_signal());
             }
 
-            let stored_recovery_record = reload_recovery::peek_for_session(&session_id)
-                .ok()
-                .flatten();
-            let has_stored_recovery_intent = stored_recovery_record
-                .as_ref()
-                .map(|record| record.status == reload_recovery::ReloadRecoveryStatus::Pending)
-                .unwrap_or(false);
-            let should_resume = has_stored_recovery_intent || {
+            let should_resume = {
                 let agent_guard = agent.lock().await;
                 self::client_session::restored_session_was_interrupted(
                     &session_id,
@@ -956,27 +909,7 @@ impl Server {
                     &agent_guard,
                 )
             };
-            if let Some(record) = stored_recovery_record.as_ref() {
-                reload_trace::record_value(
-                    &record.reload_id,
-                    "startup_recovery_decision",
-                    serde_json::json!({
-                        "session_id": session_id,
-                        "has_stored_recovery_intent": has_stored_recovery_intent,
-                        "should_resume": should_resume,
-                        "previous_status": previous_status,
-                        "is_headless": true,
-                    }),
-                );
-            }
-
             if !should_resume {
-                ReloadContext::log_recovery_outcome(
-                    "server_startup_headless",
-                    &session_id,
-                    "skipped",
-                    "restored session was not interrupted by reload",
-                );
                 stats.skipped += 1;
                 update_member_status(
                     &session_id,
@@ -1000,56 +933,19 @@ impl Server {
                 continue;
             }
 
-            let stored_directive = reload_recovery::pending_directive_for_session(&session_id)
-                .ok()
-                .flatten();
-            let reload_ctx = if stored_directive.is_none() {
-                ReloadContext::load_for_session(&session_id).ok().flatten()
-            } else {
-                None
-            };
-            let reminder = stored_directive
-                .map(|directive| directive.continuation_message)
-                .or_else(|| headless_reload_continuation_message(reload_ctx));
-            let Some(reminder) = reminder else {
-                ReloadContext::log_recovery_outcome(
-                    "server_startup_headless",
-                    &session_id,
-                    "failed",
-                    "recovery directive missing for interrupted headless session",
-                );
-                continue;
-            };
+            let reminder = "The previous jcode process stopped while this headless session was active. Continue from the saved session state, inspect the current workspace before making changes, and finish the interrupted task.".to_string();
             stats.resumed += 1;
-            ReloadContext::log_recovery_outcome(
-                "server_startup_headless",
-                &session_id,
-                "resuming",
-                "restored interrupted headless session after reload",
-            );
             let recover_swarm_members = Arc::clone(&self.swarm_state.members);
             let recover_swarms_by_id = Arc::clone(&self.swarm_state.swarms_by_id);
             let recover_event_history = Arc::clone(&self.event_history);
             let recover_event_counter = Arc::clone(&self.event_counter);
             let recover_swarm_event_tx = self.swarm_event_tx.clone();
             let recover_swarm_state = self.swarm_state.clone();
-            let recovery_reload_id = stored_recovery_record.map(|record| record.reload_id);
-
             tokio::spawn(async move {
-                if let Some(reload_id) = recovery_reload_id.as_deref() {
-                    reload_trace::record_value(
-                        reload_id,
-                        "continuation_started",
-                        serde_json::json!({
-                            "session_id": session_id,
-                            "source": "server_startup_headless",
-                        }),
-                    );
-                }
                 update_member_status(
                     &session_id,
                     "running",
-                    Some("resuming after reload".to_string()),
+                    Some("resuming after process restart".to_string()),
                     &recover_swarm_members,
                     &recover_swarms_by_id,
                     Some(&recover_event_history),
@@ -1066,19 +962,6 @@ impl Server {
                     persist_swarm_state_for(&swarm_id, &recover_swarm_state).await;
                 }
 
-                match reload_recovery::mark_delivered_if_matching_continuation(
-                    &session_id,
-                    &reminder,
-                    "server_startup_headless",
-                ) {
-                    Ok(true) => {}
-                    Ok(false) => {}
-                    Err(error) => crate::logging::warn(&format!(
-                        "Failed to mark headless reload recovery intent delivered for {}: {}",
-                        session_id, error
-                    )),
-                }
-
                 let event_tx = self::state::session_event_fanout_sender(
                     session_id.clone(),
                     Arc::clone(&recover_swarm_members),
@@ -1093,46 +976,8 @@ impl Server {
                 .await;
 
                 let (status, detail) = match result {
-                    Ok(()) => {
-                        if let Some(reload_id) = recovery_reload_id.as_deref() {
-                            reload_trace::record_value(
-                                reload_id,
-                                "continuation_finished",
-                                serde_json::json!({
-                                    "session_id": session_id,
-                                    "source": "server_startup_headless",
-                                    "status": "ready",
-                                }),
-                            );
-                        }
-                        ReloadContext::log_recovery_outcome(
-                            "server_startup_headless",
-                            &session_id,
-                            "resumed",
-                            "continuation dispatched successfully",
-                        );
-                        ("ready", None)
-                    }
-                    Err(error) => {
-                        if let Some(reload_id) = recovery_reload_id.as_deref() {
-                            reload_trace::record_value(
-                                reload_id,
-                                "continuation_failed",
-                                serde_json::json!({
-                                    "session_id": session_id,
-                                    "source": "server_startup_headless",
-                                    "error": error.to_string(),
-                                }),
-                            );
-                        }
-                        ReloadContext::log_recovery_outcome(
-                            "server_startup_headless",
-                            &session_id,
-                            "failed",
-                            &error.to_string(),
-                        );
-                        ("failed", Some(truncate_detail(&error.to_string(), 120)))
-                    }
+                    Ok(()) => ("ready", None),
+                    Err(error) => ("failed", Some(truncate_detail(&error.to_string(), 120))),
                 };
                 update_member_status(
                     &session_id,
@@ -1161,7 +1006,7 @@ impl Server {
         }
 
         crate::logging::info(&format!(
-            "[TIMING] headless reload startup recovery: candidates={}, resumed={}, skipped={}, failed_to_load={}, total={}ms",
+            "[TIMING] headless startup recovery: candidates={}, resumed={}, skipped={}, failed_to_load={}, total={}ms",
             stats.candidates,
             stats.resumed,
             stats.skipped,
@@ -1191,7 +1036,6 @@ impl Server {
 
         // Signal readiness to the spawning client only after the accept loops
         // are live, so a "ready" server can immediately handle requests.
-        publish_reload_socket_ready();
         signal_ready_fd();
 
         // Persist auxiliary discovery metadata after the server is already live.
@@ -1256,23 +1100,6 @@ impl Server {
                     reconciled
                 ));
             }
-        });
-
-        // Spawn reload monitor (event-driven via in-process channel).
-        // In the unified server design, self-dev sessions share the main server,
-        // so the shared server must always listen for reload signals.
-        let signal_sessions = Arc::clone(&self.sessions);
-        let signal_swarm_members = Arc::clone(&self.swarm_state.members);
-        let signal_shutdown_signals = Arc::clone(&self.shutdown_signals);
-        let signal_swarm_event_tx = self.swarm_event_tx.clone();
-        tokio::spawn(async move {
-            await_reload_signal(
-                signal_sessions,
-                signal_swarm_members,
-                signal_shutdown_signals,
-                signal_swarm_event_tx,
-            )
-            .await;
         });
 
         // Log when we receive SIGTERM for debugging
@@ -1390,25 +1217,10 @@ impl Server {
             }
         });
 
-        // Keep the machine awake while any session is actively streaming/processing.
-        // This watches the same "running" member signal Waybar surfaces as
-        // "N streaming" and toggles a best-effort OS power inhibitor accordingly.
-        Self::spawn_power_inhibitor(Arc::clone(&self.swarm_state.members));
-
         // Initialize the memory agent early so it's ready for all sessions
         if crate::config::config().features.memory {
             tokio::spawn(async {
                 let _ = crate::memory_agent::init().await;
-            });
-        }
-
-        // Spawn the background ambient/schedule loop.
-        if let Some(ref runner) = self.ambient_runner {
-            let ambient_handle = runner.clone();
-            let ambient_provider = Arc::clone(&self.provider);
-            crate::logging::info("Starting ambient/schedule background loop");
-            tokio::spawn(async move {
-                ambient_handle.run_loop(ambient_provider).await;
             });
         }
 
@@ -1819,71 +1631,6 @@ impl Server {
         });
     }
 
-    /// Spawn the background loop that keeps the machine awake while any session
-    /// is actively streaming/processing.
-    ///
-    /// The shared daemon owns every session, so a single inhibitor here covers
-    /// all of them. We poll the swarm-member map (the authoritative "running"
-    /// signal that also drives Waybar's "N streaming" indicator) on a short
-    /// interval and reconcile a best-effort OS power inhibitor against it. The
-    /// inhibitor blocks automatic system sleep; Linux also blocks lid-switch
-    /// handling. Windows still honors explicit lid/power-button actions from the
-    /// active power plan. The display can turn off. When no session is running,
-    /// the guard is released so normal power management resumes immediately.
-    fn spawn_power_inhibitor(swarm_members: Arc<RwLock<HashMap<String, SwarmMember>>>) {
-        // Reconcile interval. Short enough that the inhibitor engages promptly
-        // when a turn starts and releases promptly when work finishes, but cheap
-        // (a read lock + a scan) so it adds no meaningful load.
-        const RECONCILE_INTERVAL: Duration = Duration::from_secs(5);
-
-        let mut inhibitor = crate::power_inhibit::PowerInhibitor::new();
-        if !inhibitor.is_available() {
-            // Disabled via the legacy env escape hatch, or unsupported platform.
-            crate::logging::info(
-                "power_inhibit: unavailable (unsupported platform or JCODE_DISABLE_POWER_INHIBIT set); not monitoring",
-            );
-            return;
-        }
-
-        crate::logging::info(
-            "power_inhibit: monitoring active sessions to prevent sleep while streaming",
-        );
-
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(RECONCILE_INTERVAL);
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            let mut last_active: Option<bool> = None;
-            loop {
-                interval.tick().await;
-
-                // Re-evaluate the config each tick so toggling it at runtime
-                // takes effect without restarting the daemon.
-                let enabled = crate::config::config().power.prevent_sleep_while_streaming;
-
-                let active = enabled && Self::any_session_streaming(&swarm_members).await;
-                if last_active != Some(active) {
-                    crate::logging::info(&format!(
-                        "power_inhibit: {} (streaming sessions {})",
-                        if active { "engaging" } else { "releasing" },
-                        if active { "present" } else { "absent" },
-                    ));
-                    last_active = Some(active);
-                }
-                inhibitor.set_active(active);
-            }
-        });
-    }
-
-    /// Whether at least one session is currently in the "running" state, i.e.
-    /// actively streaming/processing a turn. This is the same signal that drives
-    /// the Waybar "N streaming" indicator.
-    async fn any_session_streaming(
-        swarm_members: &Arc<RwLock<HashMap<String, SwarmMember>>>,
-    ) -> bool {
-        let members = swarm_members.read().await;
-        members.values().any(|member| member.status == "running")
-    }
-
     /// Monitor the global Bus for FileTouch events and detect conflicts
     #[expect(
         clippy::too_many_arguments,
@@ -2224,31 +1971,6 @@ impl Server {
 
         let main_listener = Listener::bind(&self.socket_path)?;
         let debug_listener = Listener::bind(&self.debug_socket_path)?;
-
-        #[cfg(unix)]
-        {
-            // Server reload uses exec. Force the published listener fds to close
-            // across exec so the replacement daemon can safely rebind them.
-            mark_close_on_exec(&main_listener);
-            mark_close_on_exec(&debug_listener);
-        }
-
-        // Preserve an in-flight reload marker for exec-based reloads owned by this
-        // process, but clear stale markers from unrelated/stale processes.
-        clear_reload_marker_if_stale_for_pid(std::process::id());
-
-        match reload_recovery::collect_garbage() {
-            Ok(stats) if stats.removed > 0 || stats.errors > 0 => {
-                crate::logging::info(&format!(
-                    "Reload recovery GC: removed={}, retained={}, errors={}",
-                    stats.removed, stats.retained, stats.errors
-                ));
-            }
-            Ok(_) => {}
-            Err(error) => crate::logging::warn(&format!(
-                "Reload recovery GC failed during startup: {error}"
-            )),
-        }
 
         // Restrict socket files to owner-only so other local users cannot connect.
         let _ = crate::platform::set_permissions_owner_only(&self.socket_path);

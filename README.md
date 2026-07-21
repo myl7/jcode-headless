@@ -1,17 +1,16 @@
 # jcode
 
 jcode is a headless coding-agent runtime. It is designed for Docker, CI,
-background workers, ACP clients, and local Unix-socket automation. This tree
-does not ship a TUI, desktop app, browser login, remote web UI, or interactive
-REPL.
+background workers, and local Unix-socket automation. This tree does not ship
+a TUI, desktop app, browser login, remote web UI, or interactive REPL.
 
 ## Runtime surfaces
 
 - `jcode run --json "..."` returns one machine-readable result.
 - `jcode run --ndjson "..."` streams machine-readable events.
-- `jcode serve` runs the long-lived local daemon on its Unix socket.
-- `jcode acp` exposes the Agent Client Protocol over stdio.
-- `jcode server start|reload|stop` manages the local daemon.
+- `jcode serve` runs the long-lived local daemon on its Unix socket. The
+  daemon lifecycle belongs to the container supervisor (for example Docker),
+  so there are no start/stop management commands.
 - `jcode auth status|doctor` validates configured credentials.
 - `jcode auth import claude|openai` imports an already-authenticated
   subscription credential. It never starts a login flow.
@@ -96,8 +95,12 @@ docker run -d --name jcode \
 
 No `EXPOSE` directive or TCP listener is required. The daemon communicates
 over a local Unix socket inside the container. Operational output goes to
-stdout/stderr and `$JCODE_HOME/logs/`. Email notifications and outbound MCP or
-skill integrations remain available when configured.
+stdout/stderr and `$JCODE_HOME/logs/`. Outbound MCP or skill integrations
+remain available when configured, and agent tools such as `gmail` can send
+messages on the agent's behalf.
+
+Upgrade a deployment by replacing and restarting the container. jcode does not
+update or hot-reload its own executable.
 
 ## Build from source
 
@@ -120,7 +123,7 @@ credentials, and logs stay under the same volume or the configured runtime
 directory.
 
 Useful headless integrations include lifecycle hooks, MCP servers, skills,
-ambient and overnight work, memory, email notifications, and structured logs.
+memory, and structured logs.
 
 ## License
 

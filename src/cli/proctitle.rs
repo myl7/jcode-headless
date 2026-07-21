@@ -11,8 +11,6 @@ use crate::process_title::set_title;
 pub(crate) fn initial_title(args: &Args) -> String {
     match &args.command {
         Some(Command::Serve { .. }) => "jcode:server".to_string(),
-        Some(Command::Acp) => "jcode acp".to_string(),
-        Some(Command::Server { .. }) => "jcode server".to_string(),
         Some(Command::Run { .. }) => "jcode run".to_string(),
         Some(Command::Version { .. }) => "jcode version".to_string(),
         Some(Command::Usage { .. }) => "jcode usage".to_string(),
@@ -21,8 +19,6 @@ pub(crate) fn initial_title(args: &Args) -> String {
         Some(Command::Provider(_)) => "jcode provider".to_string(),
         Some(Command::Memory(_)) => "jcode memory".to_string(),
         Some(Command::Session(_)) => "jcode session".to_string(),
-        Some(Command::Ambient(_)) => "jcode ambient".to_string(),
-        Some(Command::Cloud(_)) => "jcode cloud".to_string(),
         Some(Command::Model(_)) => "jcode model".to_string(),
         Some(Command::ProviderTestCoverage { .. }) => "jcode provider-test-coverage".to_string(),
         Some(Command::ProviderDoctor { .. }) => "jcode provider-doctor".to_string(),
@@ -38,35 +34,17 @@ pub(crate) fn set_initial_title(args: &Args) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::lock_test_env;
     use clap::Parser;
-
-    const SELFDEV_ENV: &str = jcode_selfdev_types::CLIENT_SELFDEV_ENV;
-
-    fn with_selfdev_env_removed<T>(f: impl FnOnce() -> T) -> T {
-        let _guard = lock_test_env();
-        let previous = std::env::var_os(SELFDEV_ENV);
-        crate::env::remove_var(SELFDEV_ENV);
-        let result = f();
-        if let Some(value) = previous {
-            crate::env::set_var(SELFDEV_ENV, value);
-        }
-        result
-    }
 
     #[test]
     fn initial_title_labels_server() {
-        with_selfdev_env_removed(|| {
-            let args = Args::parse_from(["jcode", "serve"]);
-            assert_eq!(initial_title(&args), "jcode:server");
-        });
+        let args = Args::parse_from(["jcode", "serve"]);
+        assert_eq!(initial_title(&args), "jcode:server");
     }
 
     #[test]
     fn initial_title_labels_run() {
-        with_selfdev_env_removed(|| {
-            let args = Args::parse_from(["jcode", "run", "status"]);
-            assert_eq!(initial_title(&args), "jcode run");
-        });
+        let args = Args::parse_from(["jcode", "run", "status"]);
+        assert_eq!(initial_title(&args), "jcode run");
     }
 }

@@ -703,8 +703,6 @@ fn create_transfer_child_session(
     child.improve_mode = parent.improve_mode;
     child.autoreview_enabled = parent.autoreview_enabled;
     child.autojudge_enabled = parent.autojudge_enabled;
-    child.is_canary = parent.is_canary;
-    child.testing_build = parent.testing_build.clone();
     child.provider_session_id = None;
     child.status = crate::session::SessionStatus::Closed;
     child.save()?;
@@ -882,27 +880,13 @@ mod tests;
 /// Decide whether an idle live session still owes the model a continuation.
 ///
 /// This is the live-session analog of `restored_session_was_interrupted`: a
-/// session "would continue if resumed" when it has a pending reload-recovery
-/// directive, when it carries reload-interruption markers, or when its last
-/// model-visible message is a user/tool turn the assistant never answered
+/// session "would continue if resumed" when its last model-visible message is
+/// a user/tool turn the assistant never answered
 /// (e.g. the turn errored or the process was interrupted mid-generation).
 fn live_session_owes_continuation(agent: &Agent) -> bool {
     // Never continue an empty/fresh session.
     if agent.visible_conversation_message_count() == 0 {
         return false;
-    }
-
-    if super::reload_recovery::peek_for_session(agent.session_id())
-        .ok()
-        .flatten()
-        .map(|record| record.status == super::reload_recovery::ReloadRecoveryStatus::Pending)
-        .unwrap_or(false)
-    {
-        return true;
-    }
-
-    if super::client_session::session_was_interrupted_by_reload(agent) {
-        return true;
     }
 
     matches!(
@@ -965,27 +949,12 @@ pub(super) async fn handle_resume_all_sessions(
             continue;
         }
 
-        let reminder = match super::reload_recovery::pending_directive_for_session(&session_id) {
-            Ok(Some(directive)) => directive.continuation_message,
-            _ => crate::tool::selfdev::ReloadContext::interrupted_session_continuation_message(),
-        };
+        let reminder = "The previous process stopped while this session was active. Continue from the saved state, inspect the current workspace, and finish the interrupted task.".to_string();
         let display_name = agent_guard
             .session_short_name()
             .map(str::to_string)
             .unwrap_or_else(|| session_id[..8.min(session_id.len())].to_string());
         drop(agent_guard);
-
-        // Best-effort: record that the durable recovery intent was delivered.
-        if let Err(error) = super::reload_recovery::mark_delivered_if_matching_continuation(
-            &session_id,
-            &reminder,
-            "resume_all_sessions",
-        ) {
-            crate::logging::warn(&format!(
-                "resume_all_sessions: failed to mark recovery intent delivered for {}: {}",
-                session_id, error
-            ));
-        }
 
         super::live_turn::spawn_tracked_live_turn(
             &session_id,

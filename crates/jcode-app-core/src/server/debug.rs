@@ -3,7 +3,6 @@
     allow(clippy::await_holding_lock, clippy::items_after_test_module)
 )]
 
-use super::debug_ambient::maybe_handle_ambient_command;
 use super::debug_command_exec::{
     DebugInterruptContext, execute_debug_command, resolve_debug_session,
 };
@@ -21,7 +20,6 @@ use super::{
     debug_control_allowed,
 };
 use crate::agent::Agent;
-use crate::ambient_runner::AmbientRunnerHandle;
 use crate::protocol::{Request, ServerEvent, decode_request, encode_event};
 use crate::provider::Provider;
 use crate::transport::Stream;
@@ -176,7 +174,6 @@ pub(super) async fn handle_debug_client(
     swarm_event_tx: broadcast::Sender<SwarmEvent>,
     server_identity: ServerIdentity,
     server_start_time: std::time::Instant,
-    ambient_runner: Option<AmbientRunnerHandle>,
     mcp_pool: Option<Arc<crate::mcp::SharedMcpPool>>,
     shutdown_signals: Arc<RwLock<HashMap<String, InterruptSignal>>>,
     soft_interrupt_queues: super::SessionInterruptQueues,
@@ -236,7 +233,7 @@ pub(super) async fn handle_debug_client(
                 if !debug_control_allowed() {
                     let event = ServerEvent::Error {
                         id,
-                        message: "Debug control is disabled. Set JCODE_DEBUG_CONTROL=1, enable display.debug_socket, or start the shared server from a self-dev session.".to_string(),
+                        message: "Debug control is disabled. Set JCODE_DEBUG_CONTROL=1 or enable display.debug_socket.".to_string(),
                         retry_after_secs: None,
                     };
                     let json = encode_event(&event);
@@ -371,10 +368,6 @@ pub(super) async fn handle_debug_client(
                             },
                         )
                         .await?
-                        {
-                            Ok(output)
-                        } else if let Some(output) =
-                            maybe_handle_ambient_command(cmd, &ambient_runner, &provider).await?
                         {
                             Ok(output)
                         } else if maybe_handle_event_subscription_command(

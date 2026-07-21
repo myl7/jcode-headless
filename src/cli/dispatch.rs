@@ -3,18 +3,17 @@
 use anyhow::Result;
 use clap::CommandFactory;
 use std::io::IsTerminal;
-use std::process::{Command as ProcessCommand, Stdio};
 use std::time::Instant;
 
 use super::args::{
-    AmbientCommand, Args, AuthCommand, CloudCommand, CloudSessionsCommand, Command, MemoryCommand,
-    ModelCommand, ProviderCommand, ServerCommand, SessionCommand,
+    Args, AuthCommand, Command, MemoryCommand, ModelCommand, ProviderCommand, SessionCommand,
 };
-use crate::{provider_catalog, server, session, startup_profile};
+use crate::{provider_catalog, server, session};
 
-use super::{acp, commands, debug, output, provider_init};
+use super::{commands, debug, output, provider_init};
 use provider_init::ProviderChoice;
 
+#[cfg(target_os = "linux")]
 fn is_file_controlled_debug_client() -> bool {
     std::env::var_os("JCODE_DEBUG_CMD_PATH").is_some()
 }
@@ -127,49 +126,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
             ));
             server.run().await?;
         }
-        Some(Command::Acp) => {
-            acp::run_acp_command(
-                args.provider,
-                args.model.clone(),
-                args.provider_profile.clone(),
-                args.tool_profile.is_some(),
-            )
-            .await?;
-        }
-        Some(Command::Server { action }) => match action {
-            ServerCommand::Start { json } => {
-                spawn_server(
-                    &args.provider,
-                    args.model.as_deref(),
-                    args.provider_profile.as_deref(),
-                )
-                .await?;
-                if json {
-                    println!(
-                        "{}",
-                        serde_json::json!({
-                            "status": "running",
-                        })
-                    );
-                } else {
-                    println!("Jcode server is running.");
-                }
-            }
-            ServerCommand::Keepalive => {
-                run_server_keepalive(
-                    &args.provider,
-                    args.model.as_deref(),
-                    args.provider_profile.as_deref(),
-                )
-                .await?;
-            }
-            ServerCommand::Reload { force, json } => {
-                commands::run_server_reload_command(force, json).await?;
-            }
-            ServerCommand::Stop { force, json } => {
-                commands::run_server_stop_command(force, json).await?;
-            }
-        },
         Some(Command::Run {
             message,
             json,
@@ -273,12 +229,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
                 json,
             } => commands::run_session_rename_command(&session, name.as_deref(), clear, json)?,
         },
-        Some(Command::Ambient(subcmd)) => {
-            commands::run_ambient_command(map_ambient_subcommand(subcmd)).await?;
-        }
-        Some(Command::Cloud(subcmd)) => {
-            commands::run_cloud_command(map_cloud_subcommand(subcmd))?;
-        }
         Some(Command::Model(subcmd)) => match subcmd {
             ModelCommand::List { json, verbose } => {
                 commands::run_model_command(&args.provider, args.model.as_deref(), json, verbose)
@@ -399,63 +349,16 @@ fn resolve_resume_arg(args: &mut Args) -> Result<()> {
                 args.resume = Some(full_id);
             }
             Err(e) => {
-                match resume_resolution_failure_action(&resume_id, |key| std::env::var_os(key)) {
-                    // During a reload/restart handoff the client re-execs
-                    // itself with `--resume <id>` and `JCODE_RESUMING=1`. In the
-                    // client/server architecture the shared server is the authority
-                    // for session lifecycle, so an id that is not in the local store
-                    // can still be valid server-side. Hard-exiting here dumped the
-                    // user back to a shell with "No session found matching ...",
-                    // making jcode unusable after a reload (issue #328).
-                    // Instead, keep the raw id and let the remote connection resolve
-                    // it; if the server cannot find it either, the TUI surfaces a
-                    // recoverable message and falls back to a fresh session rather
-                    // than killing the process.
-                    ResumeResolutionFailureAction::DeferToServer => {
-                        crate::logging::warn(&format!(
-                            "Resume id '{}' not found locally during reload handoff ({}); deferring resolution to the server instead of exiting",
-                            resume_id, e
-                        ));
-                        // Leave args.resume as the raw id for the server to resolve.
-                    }
-                    ResumeResolutionFailureAction::Exit => {
-                        eprintln!("Error: {}", e);
-                        if !output::quiet_enabled() {
-                            eprintln!("\nUse `jcode --resume` to list available sessions.");
-                        }
-                        std::process::exit(1);
-                    }
+                eprintln!("Error: {}", e);
+                if !output::quiet_enabled() {
+                    eprintln!("\nUse `jcode --resume` to list available sessions.");
                 }
+                std::process::exit(1);
             }
         }
     }
 
     Ok(())
-}
-
-/// What to do when a `--resume <id>` cannot be resolved from the local session
-/// store. Extracted as a pure function so the reload-handoff recovery path can
-/// be unit-tested without invoking `std::process::exit` (issue #328).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResumeResolutionFailureAction {
-    /// Keep the raw id and let the shared server resolve it (reload handoff).
-    DeferToServer,
-    /// No live handoff in progress; the id is genuinely bad, so exit.
-    Exit,
-}
-
-fn resume_resolution_failure_action<F, V>(
-    _resume_id: &str,
-    var_os: F,
-) -> ResumeResolutionFailureAction
-where
-    F: Fn(&str) -> Option<V>,
-{
-    if var_os("JCODE_RESUMING").is_some() {
-        ResumeResolutionFailureAction::DeferToServer
-    } else {
-        ResumeResolutionFailureAction::Exit
-    }
 }
 
 fn resolve_resume_id(resume_id: &str) -> Result<String> {
@@ -491,117 +394,6 @@ fn map_memory_subcommand(subcmd: MemoryCommand) -> commands::MemorySubcommand {
     }
 }
 
-fn map_ambient_subcommand(subcmd: AmbientCommand) -> commands::AmbientSubcommand {
-    match subcmd {
-        AmbientCommand::Status => commands::AmbientSubcommand::Status,
-        AmbientCommand::Log => commands::AmbientSubcommand::Log,
-        AmbientCommand::Trigger => commands::AmbientSubcommand::Trigger,
-        AmbientCommand::Stop => commands::AmbientSubcommand::Stop,
-    }
-}
-
-fn map_cloud_subcommand(subcmd: CloudCommand) -> commands::CloudSubcommand {
-    match subcmd {
-        CloudCommand::Sessions { action } => {
-            commands::CloudSubcommand::Sessions(map_cloud_sessions_subcommand(action))
-        }
-    }
-}
-
-fn map_cloud_sessions_subcommand(
-    action: CloudSessionsCommand,
-) -> commands::CloudSessionsSubcommand {
-    match action {
-        CloudSessionsCommand::Configure {
-            api_base,
-            api_token,
-            api_token_env,
-            api_token_id,
-            user_id,
-            helper,
-            clear,
-        } => commands::CloudSessionsSubcommand::Configure {
-            api_base,
-            api_token,
-            api_token_env,
-            api_token_id,
-            user_id,
-            helper,
-            clear,
-        },
-        CloudSessionsCommand::Status { json } => commands::CloudSessionsSubcommand::Status { json },
-        CloudSessionsCommand::Upload {
-            session_file,
-            raw,
-            jade,
-        } => commands::CloudSessionsSubcommand::Upload {
-            session_file,
-            raw,
-            user_id: jade.user_id,
-            profile: jade.profile,
-            region: jade.region,
-            helper: jade.helper,
-        },
-        CloudSessionsCommand::UploadLatest {
-            sessions_dir,
-            raw,
-            jade,
-        } => commands::CloudSessionsSubcommand::UploadLatest {
-            sessions_dir,
-            raw,
-            user_id: jade.user_id,
-            profile: jade.profile,
-            region: jade.region,
-            helper: jade.helper,
-        },
-        CloudSessionsCommand::Sync {
-            sessions_dir,
-            since_days,
-            all,
-            max,
-            min_interval_mins,
-            raw,
-            dry_run,
-            force,
-            json,
-            jade,
-        } => commands::CloudSessionsSubcommand::Sync {
-            sessions_dir,
-            since_days,
-            all,
-            max,
-            min_interval_mins,
-            raw,
-            dry_run,
-            force,
-            json,
-            user_id: jade.user_id,
-            profile: jade.profile,
-            region: jade.region,
-            helper: jade.helper,
-        },
-        CloudSessionsCommand::List { limit, json, jade } => {
-            commands::CloudSessionsSubcommand::List {
-                limit,
-                json,
-                user_id: jade.user_id,
-                profile: jade.profile,
-                region: jade.region,
-                helper: jade.helper,
-            }
-        }
-        CloudSessionsCommand::Verify { session_id, jade } => {
-            commands::CloudSessionsSubcommand::Verify {
-                session_id,
-                user_id: jade.user_id,
-                profile: jade.profile,
-                region: jade.region,
-                helper: jade.helper,
-            }
-        }
-    }
-}
-
 async fn run_default_command(args: Args) -> Result<()> {
     let _ = args;
     let mut command = Args::command();
@@ -618,328 +410,6 @@ fn print_provider_test_coverage_report(report: &str, colorize: bool) {
         );
     } else {
         print!("{}", report);
-    }
-}
-
-pub(crate) async fn server_is_running() -> bool {
-    server_is_running_at(&server::socket_path()).await
-}
-
-async fn wait_for_existing_reload_server(context: &str) -> bool {
-    if let Some(state) = server::recent_reload_state(std::time::Duration::from_secs(30)) {
-        match state.phase {
-            server::ReloadPhase::Starting => {
-                crate::logging::info(&format!(
-                    "Reload state=starting during {}; waiting for existing server to return",
-                    context
-                ));
-                return wait_for_reloading_server().await;
-            }
-            server::ReloadPhase::Failed => {
-                crate::logging::warn(&format!(
-                    "Reload state=failed during {} on {}: {}; recent_state={}",
-                    context,
-                    server::socket_path().display(),
-                    state
-                        .detail
-                        .unwrap_or_else(|| "unknown reload failure".to_string()),
-                    server::reload_state_summary(std::time::Duration::from_secs(60))
-                ));
-            }
-            server::ReloadPhase::SocketReady => {}
-        }
-    }
-
-    false
-}
-
-pub(crate) async fn wait_for_resuming_server(context: &str, timeout: std::time::Duration) -> bool {
-    let socket_path = server::socket_path();
-    let start = std::time::Instant::now();
-    let mut announced = false;
-
-    while start.elapsed() < timeout {
-        if server_is_running_at(&socket_path).await {
-            crate::logging::info(&format!(
-                "Server became available during resume wait for {} after {}ms",
-                context,
-                start.elapsed().as_millis()
-            ));
-            return true;
-        }
-
-        if !announced {
-            crate::logging::info(&format!(
-                "Server not ready during {}; waiting up to {}ms for a resumed/reloading server before spawning a replacement",
-                context,
-                timeout.as_millis()
-            ));
-            announced = true;
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-
-    false
-}
-
-pub(crate) async fn wait_for_reloading_server() -> bool {
-    match server::await_reload_handoff(&server::socket_path(), std::time::Duration::from_secs(30))
-        .await
-    {
-        server::ReloadWaitStatus::Ready => true,
-        server::ReloadWaitStatus::Failed(detail) => {
-            crate::logging::warn(&format!(
-                "Reload handoff failed while waiting for server on {}: {}; recent_state={}",
-                server::socket_path().display(),
-                detail.unwrap_or_else(|| "unknown reload failure".to_string()),
-                server::reload_state_summary(std::time::Duration::from_secs(60))
-            ));
-            false
-        }
-        server::ReloadWaitStatus::Idle => false,
-        server::ReloadWaitStatus::Waiting { .. } => false,
-    }
-}
-
-async fn server_is_running_at(path: &std::path::Path) -> bool {
-    // Check liveness before performing a protocol handshake. On Windows the
-    // named pipe may be busy while another client is connecting; that already
-    // proves a daemon exists, while a handshake connect can otherwise wait in
-    // the transport's ERROR_PIPE_BUSY retry loop and block server startup.
-    server::has_live_listener(path).await || server::is_server_ready(path).await
-}
-
-#[cfg(unix)]
-fn spawn_lock_path(socket_path: &std::path::Path) -> std::path::PathBuf {
-    std::path::PathBuf::from(format!("{}.spawning", socket_path.display()))
-}
-
-#[cfg(unix)]
-struct SpawnLockGuard {
-    _file: std::fs::File,
-    path: std::path::PathBuf,
-}
-
-#[cfg(unix)]
-impl Drop for SpawnLockGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
-
-#[cfg(unix)]
-fn try_acquire_spawn_lock(path: &std::path::Path) -> Result<Option<SpawnLockGuard>> {
-    use std::fs::OpenOptions;
-    use std::os::fd::AsRawFd;
-
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(false)
-        .open(path)?;
-    let fd = file.as_raw_fd();
-    let ret = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-    if ret == 0 {
-        Ok(Some(SpawnLockGuard {
-            _file: file,
-            path: path.to_path_buf(),
-        }))
-    } else {
-        Ok(None)
-    }
-}
-
-#[cfg(unix)]
-async fn acquire_spawn_lock_or_wait(
-    socket_path: &std::path::Path,
-) -> Result<Option<SpawnLockGuard>> {
-    let lock_path = spawn_lock_path(socket_path);
-    let wait_start = std::time::Instant::now();
-    let wait_timeout = std::time::Duration::from_secs(10);
-    let mut announced_wait = false;
-
-    loop {
-        if let Some(lock) = try_acquire_spawn_lock(&lock_path)? {
-            return Ok(Some(lock));
-        }
-
-        if server_is_running_at(socket_path).await {
-            return Ok(None);
-        }
-
-        if !announced_wait {
-            output::stderr_info("Another client is starting the server, waiting...");
-            announced_wait = true;
-        }
-
-        if wait_start.elapsed() >= wait_timeout {
-            anyhow::bail!(
-                "Timed out waiting for another client to start server at {}",
-                socket_path.display()
-            );
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-}
-
-pub(crate) async fn spawn_server(
-    provider_choice: &ProviderChoice,
-    model: Option<&str>,
-    provider_profile: Option<&str>,
-) -> Result<()> {
-    let socket_path = server::socket_path();
-    if server_is_running_at(&socket_path).await {
-        startup_profile::mark("server_ready");
-        return Ok(());
-    }
-
-    if wait_for_existing_reload_server("server spawn").await {
-        startup_profile::mark("server_ready");
-        return Ok(());
-    }
-
-    #[cfg(unix)]
-    let _spawn_lock = acquire_spawn_lock_or_wait(&socket_path).await?;
-
-    if server_is_running_at(&socket_path).await {
-        startup_profile::mark("server_ready");
-        return Ok(());
-    }
-
-    if wait_for_existing_reload_server("server spawn after lock").await {
-        startup_profile::mark("server_ready");
-        return Ok(());
-    }
-
-    startup_profile::mark("server_spawn_start");
-    output::stderr_info("Starting server...");
-    let exe = std::env::current_exe()
-        .ok()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine executable path for server spawn"))?;
-    let mut cmd = ProcessCommand::new(&exe);
-    cmd.arg("--provider").arg(provider_choice.as_arg_value());
-    if let Some(provider_profile) = provider_profile {
-        cmd.arg("--provider-profile").arg(provider_profile);
-    }
-    if let Some(model) = model {
-        cmd.arg("--model").arg(model);
-    }
-    cmd.arg("serve")
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-
-    #[cfg(unix)]
-    {
-        let _child = server::spawn_server_notify(&mut cmd).await?;
-        startup_profile::mark("server_ready");
-    }
-    #[cfg(not(unix))]
-    {
-        use std::io::Read;
-
-        let mut child = cmd.spawn()?;
-        let start = std::time::Instant::now();
-        // Windows server bootstrap can legitimately take tens of seconds on
-        // slow hosts (auth preflights + provider init were observed at 15-60s
-        // on a Windows Server VPS, issue #503). The child's liveness is
-        // checked every poll, so a generous budget only delays the error for
-        // a genuinely hung server, while a crashed server still fails fast
-        // with its stderr.
-        let timeout = std::time::Duration::from_secs(120);
-        while start.elapsed() < timeout {
-            if server::has_live_listener(&socket_path).await {
-                startup_profile::mark("server_ready");
-                return Ok(());
-            }
-
-            if let Some(status) = child.try_wait()? {
-                let mut stderr = String::new();
-                if let Some(mut pipe) = child.stderr.take() {
-                    let _ = pipe.read_to_string(&mut stderr);
-                }
-                let detail = stderr.trim();
-                if detail.is_empty() {
-                    anyhow::bail!("Server exited before becoming ready (status: {})", status);
-                }
-                anyhow::bail!(
-                    "Server exited before becoming ready (status: {}). {}",
-                    status,
-                    detail
-                );
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-
-        anyhow::bail!(
-            "Timed out waiting for server to become ready at {} after {}ms",
-            server::socket_path().display(),
-            timeout.as_millis()
-        );
-    }
-
-    #[cfg(unix)]
-    Ok(())
-}
-
-async fn run_server_keepalive(
-    provider_choice: &ProviderChoice,
-    model: Option<&str>,
-    provider_profile: Option<&str>,
-) -> Result<()> {
-    let mut owner_closed = tokio::task::spawn_blocking(|| {
-        let mut stdin = std::io::stdin();
-        let mut buffer = [0u8; 256];
-        loop {
-            match std::io::Read::read(&mut stdin, &mut buffer) {
-                Ok(0) | Err(_) => return,
-                Ok(_) => {}
-            }
-        }
-    });
-    let mut client: Option<server::Client> = None;
-    let mut first_attempt = true;
-
-    loop {
-        let delay = if first_attempt {
-            first_attempt = false;
-            std::time::Duration::ZERO
-        } else if client.is_some() {
-            std::time::Duration::from_secs(30)
-        } else {
-            std::time::Duration::from_secs(1)
-        };
-        tokio::select! {
-            _ = &mut owner_closed => return Ok(()),
-            _ = tokio::time::sleep(delay) => {
-                if client.is_some() {
-                    // A Ping is a one-shot control request, so sending it over
-                    // the held connection would make the server close that
-                    // connection after replying. Probe through a short-lived
-                    // client instead and leave the counted keepalive connected.
-                    let healthy = tokio::time::timeout(
-                        std::time::Duration::from_secs(5),
-                        async {
-                            let mut probe = server::Client::connect().await?;
-                            probe.ping().await
-                        },
-                    )
-                    .await
-                    .is_ok_and(|result| result.unwrap_or(false));
-                    if healthy {
-                        continue;
-                    }
-                    client = None;
-                }
-                if spawn_server(provider_choice, model, provider_profile).await.is_ok()
-                    && let Ok(connected) = server::Client::connect().await
-                {
-                    client = Some(connected);
-                }
-            }
-        }
     }
 }
 

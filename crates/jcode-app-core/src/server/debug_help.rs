@@ -60,13 +60,11 @@ SERVER COMMANDS (server: prefix or no prefix):
   swarm:help               - Full swarm command reference
   create_session                - Create headless session
   create_session:<path>         - Create session with working dir
-  create_session:selfdev:<path> - Create headless self-dev session
   destroy_session:<id>     - Destroy a session
   set_model:<model>        - Switch model (may change provider)
   set_provider:<name>      - Switch provider (claude/openai/openrouter/cursor/copilot/gemini/antigravity)
   trigger_extraction       - Force end-of-session memory extraction
   available_models         - List all available models
-  reload                   - Trigger server reload with current binary
 
 SWARM COMMANDS (swarm: prefix):
   swarm:members            - List all swarm members with details
@@ -84,18 +82,6 @@ SWARM COMMANDS (swarm: prefix):
   swarm:broadcast:<msg>    - Broadcast to swarm members
   swarm:notify:<sid> <msg> - Send DM to specific session
   swarm:help               - Full swarm command reference
-
-AMBIENT COMMANDS (ambient: prefix):
-  ambient:status              - Ambient + schedule runner state, counts, next due items
-  ambient:queue               - Scheduled queue contents with target/session metadata
-  ambient:trigger             - Manually trigger an ambient cycle
-  ambient:log                 - Recent transcript summaries
-  ambient:permissions         - List pending permission requests
-  ambient:approve:<id>        - Approve a permission request
-  ambient:deny:<id> [reason]  - Deny a permission request (optional reason)
-  ambient:start               - Start/restart ambient mode
-  ambient:stop                - Stop ambient mode
-  ambient:help                - Ambient command reference
 
 EVENTS COMMANDS (events: prefix):
   events:recent            - Get recent events (default 50)

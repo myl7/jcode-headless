@@ -9,19 +9,15 @@ use anyhow::Result;
 use jcode_agent_runtime::InterruptSignal;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
 type SessionAgents = Arc<RwLock<HashMap<String, Arc<Mutex<Agent>>>>>;
 type ChannelSubscriptions = Arc<RwLock<HashMap<String, HashMap<String, HashSet<String>>>>>;
 
-const RELOAD_DISCONNECT_MARKER_MAX_AGE: Duration = Duration::from_secs(30);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DisconnectDisposition {
     Closed,
     Crashed,
-    Reloading,
 }
 
 fn disconnect_disposition(disconnected_while_processing: bool) -> DisconnectDisposition {
@@ -29,11 +25,7 @@ fn disconnect_disposition(disconnected_while_processing: bool) -> DisconnectDisp
         return DisconnectDisposition::Closed;
     }
 
-    if crate::server::reload_marker_active(RELOAD_DISCONNECT_MARKER_MAX_AGE) {
-        DisconnectDisposition::Reloading
-    } else {
-        DisconnectDisposition::Crashed
-    }
+    DisconnectDisposition::Crashed
 }
 
 async fn session_has_live_successor(
@@ -117,11 +109,6 @@ pub(super) async fn cleanup_client_connection(
                         DisconnectDisposition::Closed => {
                             agent.mark_closed();
                         }
-                        DisconnectDisposition::Reloading => {
-                            agent.mark_crashed(Some(
-                                "Server reload interrupted processing".to_string(),
-                            ));
-                        }
                         DisconnectDisposition::Crashed => {
                             agent.mark_crashed(Some(
                                 "Client disconnected while processing".to_string(),
@@ -151,12 +138,6 @@ pub(super) async fn cleanup_client_connection(
                                 "client_disconnected_while_processing",
                             )
                         }
-                        DisconnectDisposition::Reloading => {
-                            crate::runtime_memory_log::RuntimeMemoryLogEvent::new(
-                                "session_reloading",
-                                "server_reload_disconnect",
-                            )
-                        }
                     }
                     .with_session_id(sid.clone())
                     .force_attribution();
@@ -184,9 +165,6 @@ pub(super) async fn cleanup_client_connection(
             DisconnectDisposition::Closed => ("stopped", Some("disconnected".to_string())),
             DisconnectDisposition::Crashed => {
                 ("crashed", Some("disconnect while running".to_string()))
-            }
-            DisconnectDisposition::Reloading => {
-                ("stopped", Some("server reload in progress".to_string()))
             }
         };
         update_member_status(
@@ -270,48 +248,6 @@ mod tests {
 
     #[test]
     fn running_disconnect_without_reload_is_crash() {
-        let _guard = crate::storage::lock_test_env();
-        crate::server::clear_reload_marker();
         assert_eq!(disconnect_disposition(true), DisconnectDisposition::Crashed);
-    }
-
-    #[test]
-    fn running_disconnect_during_reload_is_expected() {
-        let _guard = crate::storage::lock_test_env();
-        let runtime = tempfile::TempDir::new().expect("create runtime dir");
-        crate::env::set_var("JCODE_RUNTIME_DIR", runtime.path());
-        crate::server::clear_reload_marker();
-        crate::server::write_reload_state(
-            "test-request",
-            "test-hash",
-            crate::server::ReloadPhase::Starting,
-            None,
-        );
-        assert_eq!(
-            disconnect_disposition(true),
-            DisconnectDisposition::Reloading
-        );
-        crate::server::clear_reload_marker();
-        crate::env::remove_var("JCODE_RUNTIME_DIR");
-    }
-
-    #[test]
-    fn running_disconnect_during_recent_socket_ready_reload_is_expected() {
-        let _guard = crate::storage::lock_test_env();
-        let runtime = tempfile::TempDir::new().expect("create runtime dir");
-        crate::env::set_var("JCODE_RUNTIME_DIR", runtime.path());
-        crate::server::clear_reload_marker();
-        crate::server::write_reload_state(
-            "test-request",
-            "test-hash",
-            crate::server::ReloadPhase::SocketReady,
-            None,
-        );
-        assert_eq!(
-            disconnect_disposition(true),
-            DisconnectDisposition::Reloading
-        );
-        crate::server::clear_reload_marker();
-        crate::env::remove_var("JCODE_RUNTIME_DIR");
     }
 }

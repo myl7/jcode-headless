@@ -42,11 +42,7 @@ fn find_wrap_marker_incremental(accumulated: &str, appended_len: usize) -> Optio
         .map(|rel_idx| scan_start + rel_idx)
 }
 
-fn reload_interrupted_tool_result(tc: &ToolCall, elapsed_secs: f64) -> (String, bool) {
-    if tc.name == "selfdev" {
-        return ("Reload initiated. Process restarting...".to_string(), false);
-    }
-
+fn shutdown_interrupted_tool_result(tc: &ToolCall, elapsed_secs: f64) -> (String, bool) {
     let action = tc
         .input
         .get("action")
@@ -59,7 +55,7 @@ fn reload_interrupted_tool_result(tc: &ToolCall, elapsed_secs: f64) -> (String, 
         let input = serde_json::to_string(&tc.input).unwrap_or_else(|_| "{}".to_string());
         return (
             format!(
-                "[Tool '{}' wait interrupted by server reload after {:.1}s. The underlying operation may still be running. Resume the wait by rerunning the same tool call with input: {}]",
+                "[Tool '{}' wait interrupted by process shutdown after {:.1}s. The underlying operation may still be running. Resume the wait by rerunning the same tool call with input: {}]",
                 tc.name, elapsed_secs, input
             ),
             false,
@@ -68,7 +64,7 @@ fn reload_interrupted_tool_result(tc: &ToolCall, elapsed_secs: f64) -> (String, 
 
     (
         format!(
-            "[Tool '{}' interrupted by server reload after {:.1}s]",
+            "[Tool '{}' interrupted by process shutdown after {:.1}s]",
             tc.name, elapsed_secs
         ),
         true,
@@ -541,10 +537,11 @@ impl Agent {
                                 "Graceful shutdown during streaming - checkpointing partial response",
                             );
                             let _ = event_tx.send(ServerEvent::TextDelta {
-                                text: "\n\n[generation interrupted - server reloading]".to_string(),
+                                text: "\n\n[generation interrupted - process shutting down]"
+                                    .to_string(),
                             });
                             text_content
-                                .push_str("\n\n[generation interrupted - server reloading]");
+                                .push_str("\n\n[generation interrupted - process shutting down]");
                             break;
                         }
                     }
@@ -1171,7 +1168,7 @@ impl Agent {
                         Role::User,
                         vec![ContentBlock::ToolResult {
                             tool_use_id: tc.id.clone(),
-                            content: "[Skipped - server reloading]".to_string(),
+                            content: "[Skipped - process shutting down]".to_string(),
                             is_error: Some(true),
                         }],
                     );
@@ -1331,7 +1328,7 @@ impl Agent {
                 self.background_tool_signal.reset();
 
                 // Wait for tool completion OR background signal from user (Alt+B)
-                // OR graceful shutdown signal from server reload
+                // OR graceful process shutdown signal
                 let bg_signal = self.background_tool_signal.clone();
                 let shutdown_signal = self.graceful_shutdown.clone();
                 let allow_reload_handoff = tc.name == "bash";
@@ -1443,26 +1440,25 @@ impl Agent {
                         }
                     }
                 } else if self.is_graceful_shutdown() {
-                    // Server reload - abort tool and save interrupted result
+                    // Process shutdown - abort tool and save interrupted result
                     logging::info(&format!(
-                        "Tool '{}' interrupted by server reload after {:.1}s",
+                        "Tool '{}' interrupted by process shutdown after {:.1}s",
                         tc.name,
                         tool_elapsed.as_secs_f64()
                     ));
                     tool_handle.abort();
 
-                    // For selfdev reload and wait-like tools, the interruption is expected:
-                    // selfdev initiated the restart, while wait-like tools should be resumed
-                    // after reload rather than treated as failed work.
+                    // Wait-like tools should be resumed after restart rather than
+                    // treated as failed work.
                     let (interrupted_msg, is_error) =
-                        reload_interrupted_tool_result(tc, tool_elapsed.as_secs_f64());
+                        shutdown_interrupted_tool_result(tc, tool_elapsed.as_secs_f64());
 
                     let _ = event_tx.send(ServerEvent::ToolDone {
                         id: tc.id.clone(),
                         name: tc.name.clone(),
                         output: interrupted_msg.clone(),
                         error: if is_error {
-                            Some("interrupted by reload".to_string())
+                            Some("interrupted by shutdown".to_string())
                         } else {
                             None
                         },
@@ -1485,7 +1481,7 @@ impl Agent {
                             Role::User,
                             vec![ContentBlock::ToolResult {
                                 tool_use_id: remaining_tc.id.clone(),
-                                content: "[Skipped - server reloading]".to_string(),
+                                content: "[Skipped - process shutting down]".to_string(),
                                 is_error: Some(true),
                             }],
                         );
@@ -1580,13 +1576,13 @@ mod tests {
     }
 
     #[test]
-    fn reload_interrupted_bg_wait_is_non_error_and_resumable() {
+    fn shutdown_interrupted_bg_wait_is_non_error_and_resumable() {
         let tc = tool_call(
             "bg",
             json!({"action": "wait", "task_id": "bg-123", "max_wait_seconds": 300}),
         );
 
-        let (message, is_error) = reload_interrupted_tool_result(&tc, 1.2);
+        let (message, is_error) = shutdown_interrupted_tool_result(&tc, 1.2);
 
         assert!(!is_error);
         assert!(message.contains("Resume the wait"));
@@ -1594,13 +1590,13 @@ mod tests {
     }
 
     #[test]
-    fn reload_interrupted_non_wait_tool_remains_error() {
+    fn shutdown_interrupted_non_wait_tool_remains_error() {
         let tc = tool_call("bash", json!({"command": "sleep 10"}));
 
-        let (message, is_error) = reload_interrupted_tool_result(&tc, 1.2);
+        let (message, is_error) = shutdown_interrupted_tool_result(&tc, 1.2);
 
         assert!(is_error);
-        assert!(message.contains("interrupted by server reload"));
+        assert!(message.contains("interrupted by process shutdown"));
     }
 
     /// Reference O(n) full scan, preserving the original precedence: the

@@ -420,7 +420,12 @@ pub(super) fn run_version_command(emit_json: bool) -> Result<()> {
         update_semver: jcode_build_meta::update_semver().to_string(),
         git_hash: jcode_build_meta::git_hash().to_string(),
         git_tag: jcode_build_meta::git_tag().to_string(),
-        build_time: crate::build::current_binary_build_time_string()
+        build_time: std::env::current_exe()
+            .ok()
+            .and_then(|path| std::fs::metadata(path).ok())
+            .and_then(|meta| meta.modified().ok())
+            .map(chrono::DateTime::<chrono::Utc>::from)
+            .map(|time| time.format("%Y-%m-%d %H:%M:%S %z").to_string())
             .unwrap_or_else(|| "unknown".to_string()),
         git_date: jcode_build_meta::git_date().to_string(),
         release_build: jcode_build_meta::is_release_build(),

@@ -98,15 +98,6 @@ pub(crate) enum Command {
         server_name: Option<String>,
     },
 
-    /// Run as an Agent Client Protocol (ACP) adapter backed by the Jcode daemon
-    Acp,
-
-    /// Manage the background server daemon (e.g. `jcode server stop`).
-    Server {
-        #[command(subcommand)]
-        action: ServerCommand,
-    },
-
     /// Run a single message and exit
     Run {
         /// Emit a machine-readable JSON result instead of streaming text
@@ -173,14 +164,6 @@ pub(crate) enum Command {
     /// Session management commands
     #[command(subcommand)]
     Session(SessionCommand),
-
-    /// Ambient mode management
-    #[command(subcommand)]
-    Ambient(AmbientCommand),
-
-    /// Optional Jcode Cloud/Jade integration commands
-    #[command(subcommand)]
-    Cloud(CloudCommand),
 
     /// Model management commands
     #[command(subcommand)]
@@ -265,214 +248,6 @@ pub(crate) enum Command {
         #[arg(long, requires = "coverage", default_value_t = 50)]
         coverage_limit: usize,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub(crate) enum ServerCommand {
-    /// Start the background server if it is not already running.
-    Start {
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Internal: hold a lightweight connection open until stdin closes.
-    #[command(hide = true)]
-    Keepalive,
-
-    /// Gracefully reload the running background server onto the newest binary.
-    ///
-    /// This is the preferred way to pick up an upgrade: the daemon hands its
-    /// live sessions off to a freshly exec'd server (the same path `/reload`
-    /// uses), so headless/swarm work is preserved instead of being killed. If
-    /// no server is running, this is a no-op. Use `server stop --force` only
-    /// when you need to hard-retire a wedged daemon.
-    Reload {
-        /// Reload even if the running server is already on the newest binary.
-        #[arg(long)]
-        force: bool,
-
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Stop the running background server and clear its socket.
-    ///
-    /// Prefer `server reload` after an upgrade; it preserves live sessions.
-    /// `stop` terminates the daemon (SIGTERM, escalating to SIGKILL), which
-    /// drops any in-flight headless/swarm sessions, so it requires `--force`
-    /// as a deliberate acknowledgement.
-    Stop {
-        /// Confirm that terminating the daemon (and dropping live sessions) is intended.
-        #[arg(long)]
-        force: bool,
-
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub(crate) enum CloudCommand {
-    /// Upload, list, verify, and view cloud-synced sessions
-    Sessions {
-        #[command(subcommand)]
-        action: CloudSessionsCommand,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub(crate) enum CloudSessionsCommand {
-    /// Configure Jade API defaults for cloud sessions on this machine
-    Configure {
-        /// Jade Session API base URL
-        #[arg(long)]
-        api_base: Option<String>,
-
-        /// Jade Session API bearer token. Prefer --api-token-env to avoid shell history.
-        #[arg(long, conflicts_with = "api_token_env")]
-        api_token: Option<String>,
-
-        /// Read the Jade Session API bearer token from this environment variable
-        #[arg(long, conflicts_with = "api_token")]
-        api_token_env: Option<String>,
-
-        /// Optional Jade token id, e.g. dev-admin
-        #[arg(long)]
-        api_token_id: Option<String>,
-
-        /// Default Jade user id for commands that do not pass --user-id
-        #[arg(long)]
-        user_id: Option<String>,
-
-        /// Default private Jade session helper path
-        #[arg(long)]
-        helper: Option<String>,
-
-        /// Remove the saved cloud sessions config
-        #[arg(long)]
-        clear: bool,
-    },
-
-    /// Show saved Jade API defaults for cloud sessions without printing secrets
-    Status {
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Upload a specific local session JSON file to Jade cloud storage
-    Upload {
-        /// Path to a local Jcode session JSON file
-        session_file: String,
-
-        /// Upload without Jade's redaction pass
-        #[arg(long)]
-        raw: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-
-    /// Upload the newest local Jcode session to Jade cloud storage
-    UploadLatest {
-        /// Directory containing local Jcode session JSON files
-        #[arg(long, default_value = "~/.jcode/sessions")]
-        sessions_dir: String,
-
-        /// Upload without Jade's redaction pass
-        #[arg(long)]
-        raw: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-
-    /// Sync new or changed local sessions to Jade cloud storage (idempotent; safe to schedule)
-    Sync {
-        /// Directory containing local Jcode session JSON files (default: ~/.jcode/sessions)
-        #[arg(long)]
-        sessions_dir: Option<String>,
-
-        /// Only consider sessions modified within this many days (ignored with --all)
-        #[arg(long)]
-        since_days: Option<u64>,
-
-        /// Sync all matching sessions regardless of age
-        #[arg(long)]
-        all: bool,
-
-        /// Maximum number of sessions to upload in this run
-        #[arg(long, default_value_t = 50)]
-        max: usize,
-
-        /// Skip this run if the last sync ran fewer than this many minutes ago (for cron/timers)
-        #[arg(long)]
-        min_interval_mins: Option<u64>,
-
-        /// Upload without Jade's redaction pass
-        #[arg(long)]
-        raw: bool,
-
-        /// Show what would be uploaded without uploading or recording state
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Re-upload sessions even if local sync state says they are unchanged
-        #[arg(long)]
-        force: bool,
-
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-
-    /// List cloud-uploaded sessions from the Jade index
-    List {
-        /// Maximum number of sessions to show
-        #[arg(long, default_value_t = 25)]
-        limit: usize,
-
-        /// Emit JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-
-    /// Verify that cloud metadata and the S3 session blob both exist
-    Verify {
-        /// Session ID to verify
-        session_id: String,
-
-        #[command(flatten)]
-        jade: JadeCloudOptions,
-    },
-}
-
-#[derive(Parser, Debug, Clone)]
-pub(crate) struct JadeCloudOptions {
-    /// Jade user id to pass to the dev helper
-    #[arg(long, default_value = "dev")]
-    pub(crate) user_id: String,
-
-    /// AWS CLI profile used by the private dev Jade helper. If omitted, the helper decides.
-    #[arg(long)]
-    pub(crate) profile: Option<String>,
-
-    /// AWS region used by the private dev Jade helper. If omitted, the helper decides.
-    #[arg(long)]
-    pub(crate) region: Option<String>,
-
-    /// Path to the private Jade session helper. Defaults to $JCODE_JADE_SESSIONS_HELPER or ~/jade/scripts/jade_sessions.py.
-    #[arg(long)]
-    pub(crate) helper: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -629,18 +404,6 @@ pub(crate) enum AuthCommand {
         #[arg(long)]
         json: bool,
     },
-}
-
-#[derive(Subcommand, Debug)]
-pub(crate) enum AmbientCommand {
-    /// Show ambient mode status
-    Status,
-    /// Show recent ambient activity log
-    Log,
-    /// Manually trigger an ambient cycle
-    Trigger,
-    /// Stop ambient mode
-    Stop,
 }
 
 #[derive(Subcommand, Debug)]

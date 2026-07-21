@@ -6,12 +6,8 @@
 mod mock_provider;
 mod test_support;
 
-mod ambient;
-mod binary_integration;
 mod burst_spawn;
 mod provider_behavior;
-mod reload_multiclient;
-mod safety;
 mod session_flow;
 #[cfg(windows)]
 mod windows_lifecycle;

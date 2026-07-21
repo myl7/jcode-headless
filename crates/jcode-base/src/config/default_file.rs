@@ -324,7 +324,7 @@ swarm_max_concurrent_agents = 32
 # Runs when an agent turn begins, before the model starts generating and before
 # the first pre_tool. Lets integrations detect the agent is working during the
 # think/stream window before any tool call. Extra fields: JCODE_HOOK_MODEL,
-# JCODE_HOOK_SOURCE ("chat"/"resume"/"ambient").
+# JCODE_HOOK_SOURCE ("chat"/"resume").
 # turn_start = "~/bin/jcode-turn-start"
 #
 # Runs when an agent turn completes. Extra fields: JCODE_HOOK_STATUS
@@ -353,88 +353,7 @@ swarm_max_concurrent_agents = 32
 # JCODE_HOOK_ERROR.
 # post_tool = ""
 
-[ambient]
-# Ambient mode: background agent that maintains your codebase
-# Enable ambient mode (default: false)
-enabled = false
-# Provider override (default: auto-select based on available credentials)
-# provider = "claude"
-# Model override (default: provider's strongest)
-# model = "claude-sonnet-4-20250514"
-# Allow API key usage (default: false, only OAuth to avoid surprise costs)
-allow_api_keys = false
-# Daily token budget when using API keys (optional)
-# api_daily_budget = 100000
-# Minimum interval between cycles in minutes
-min_interval_minutes = 5
-# Maximum interval between cycles in minutes
-max_interval_minutes = 120
-# Pause ambient when user has active session
-pause_on_active_session = true
-# Enable proactive work (new features, refactoring) vs garden-only (lint, format, deps)
-proactive_work = true
-# Branch prefix for proactive work
-work_branch_prefix = "ambient/"
-[power]
-# Prevent automatic system sleep while any jcode session is actively working.
-# Linux also blocks lid-switch suspend. Windows still respects explicit lid-close
-# and power-button actions from your active power plan. The display may sleep.
-# The guard is held only for as long as work is in flight. (default: true)
-# Set JCODE_DISABLE_POWER_INHIBIT=1 to force-disable regardless of this setting.
-prevent_sleep_while_streaming = true
 
-[safety]
-# Notification settings for ambient mode events
-
-# ntfy.sh push notifications (free, phone app: https://ntfy.sh)
-# ntfy_topic = "jcode-ambient-your-secret-topic"
-# ntfy_server = "https://ntfy.sh"
-
-
-# Email notifications via SMTP
-# email_enabled = false
-# email_to = "you@example.com"
-# email_from = "jcode@example.com"
-# email_smtp_host = "smtp.gmail.com"
-# email_smtp_port = 587
-# Password via env: JCODE_SMTP_PASSWORD (preferred) or config below
-# email_password = ""
-
-# IMAP for email replies (reply to ambient emails to send directives)
-# email_reply_enabled = false
-# email_imap_host = "imap.gmail.com"
-# email_imap_port = 993
-
-# Telegram notifications via Bot API (free, https://telegram.org)
-# telegram_enabled = false
-# telegram_bot_token = ""  # From @BotFather (prefer JCODE_TELEGRAM_BOT_TOKEN env var)
-# telegram_chat_id = ""    # Your user/chat ID
-# telegram_reply_enabled = false  # Reply to bot messages to send directives
-
-# Discord notifications via Bot API (https://discord.com/developers)
-# discord_enabled = false
-# discord_bot_token = ""     # From Discord Developer Portal (prefer JCODE_DISCORD_BOT_TOKEN env var)
-# discord_channel_id = ""    # Channel ID to post in
-# discord_bot_user_id = ""   # Bot's user ID (for filtering own messages)
-# discord_reply_enabled = false  # Messages in channel become agent directives
-
-# Jade cloud relay (outbound-only long polling, disabled by default).
-# Prefer environment variables for secrets:
-# JCODE_JADE_RELAY_API_BASE, JCODE_JADE_RELAY_TOKEN, JCODE_JADE_RELAY_TOKEN_ID,
-# JCODE_JADE_RELAY_USER_ID, JCODE_JADE_RELAY_SESSION_ID.
-# jade_relay_enabled = false
-# jade_relay_reply_enabled = false   # Deliver cloud prompts to one configured live session.
-
-# [sponsors] # Legacy config section name retained for compatibility.
-# Tool partner discovery (enabled by default; set enabled = false to opt out).
-# When enabled, the agent gains a `discover_tools` tool listing third-party
-# developer tools from Jcode's hosted partner directory. Some partners may
-# share revenue with Jcode when a referred user becomes a customer, but
-# partnership status never influences recommendations. Each session's first
-# use of discover_tools shows a concise disclosure with a learn-more link.
-# See https://jcode.sh/discovery-tools
-# enabled = true
-# endpoint = "https://api.jcode.sh/v1/discovery"
 	"#;
 
         std::fs::write(&path, default_content)?;

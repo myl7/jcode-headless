@@ -4,13 +4,12 @@
 //! Environment variables override config file settings.
 
 pub use jcode_config_types::{
-    AgentsConfig, AmbientConfig, AuthConfig, AutoJudgeConfig, AutoReviewConfig, CompactionConfig,
-    CompactionMode, CrossProviderFailoverMode, DiagramDisplayMode, DiagramPanePosition,
-    DiffDisplayMode, DisplayConfig, FeatureConfig, HooksConfig, LatexRenderingMode,
-    MarkdownSpacingMode, NamedProviderAuth, NamedProviderConfig, NamedProviderModelConfig,
-    NamedProviderType, NativeScrollbarConfig, OverscrollStatusMode, PowerConfig, ProviderConfig,
-    ReasoningDisplayMode, SafetyConfig, SponsorsConfig, SwarmSpawnMode, SwarmStripLayout,
-    WebSearchConfig, WebSearchEngine,
+    AgentsConfig, AuthConfig, AutoJudgeConfig, AutoReviewConfig, CompactionConfig, CompactionMode,
+    CrossProviderFailoverMode, DiagramDisplayMode, DiagramPanePosition, DiffDisplayMode,
+    DisplayConfig, FeatureConfig, HooksConfig, LatexRenderingMode, MarkdownSpacingMode,
+    NamedProviderAuth, NamedProviderConfig, NamedProviderModelConfig, NamedProviderType,
+    NativeScrollbarConfig, OverscrollStatusMode, ProviderConfig, ReasoningDisplayMode,
+    SwarmSpawnMode, SwarmStripLayout, WebSearchConfig, WebSearchEngine,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -113,7 +112,6 @@ const CONFIG_ENV_KEYS: &[&str] = &[
     "JCODE_PRESERVE_REASONING_CONTEXT",
     "JCODE_PERFORMANCE",
     "JCODE_PIN_IMAGES",
-    "JCODE_PREVENT_SLEEP_WHILE_STREAMING",
     "JCODE_PROVIDER",
     "JCODE_PROMPT_ENTRY_ANIMATION",
     "JCODE_QUEUE_MODE",
@@ -273,8 +271,8 @@ pub fn config() -> &'static Config {
 
     if let Some(reason) = reload_reason {
         crate::logging::info(&format!("CONFIG_RELOAD {}", reason));
-        // A config reload can change config-derived system prompt sections
-        // (feature toggles, sponsors, ...), which legitimately invalidates the
+        // A config reload can change config-derived system prompt sections,
+        // which legitimately invalidates the
         // KV cache prefix of warm sessions. Document it so a subsequent
         // harness-attributed cache miss is surfaced with this cause instead of
         // as an unexplained prompt mutation.
@@ -459,26 +457,14 @@ pub struct Config {
     /// Lifecycle hooks (external commands at turn/session/tool boundaries)
     pub hooks: HooksConfig,
 
-    /// Ambient mode configuration
-    pub ambient: AmbientConfig,
-
-    /// Safety / notification configuration
-    pub safety: SafetyConfig,
-
     /// Compaction configuration
     pub compaction: CompactionConfig,
-
-    /// Power-management configuration (prevent sleep while streaming)
-    pub power: PowerConfig,
 
     /// Auto-review configuration
     pub autoreview: AutoReviewConfig,
 
     /// Auto-judge configuration
     pub autojudge: AutoJudgeConfig,
-
-    /// Sponsored discovery configuration
-    pub sponsors: SponsorsConfig,
 }
 
 /// Agent Client Protocol adapter configuration.

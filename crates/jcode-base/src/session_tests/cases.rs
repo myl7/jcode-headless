@@ -444,7 +444,6 @@ fn load_startup_stub_preserves_metadata_but_skips_heavy_vectors() -> Result<()> 
     session.reasoning_effort = Some("high".to_string());
     session.provider_key = Some("openai".to_string());
     session.route_api_method = Some("openai-api".to_string());
-    session.set_canary("self-dev");
     session.append_stored_message(StoredMessage {
         id: "msg_1".to_string(),
         role: Role::User,
@@ -470,10 +469,7 @@ fn load_startup_stub_preserves_metadata_but_skips_heavy_vectors() -> Result<()> 
         os: "linux".to_string(),
         arch: "x86_64".to_string(),
         pid: 123,
-        is_selfdev: true,
         is_debug: false,
-        is_canary: true,
-        testing_build: Some("self-dev".to_string()),
         working_git: None,
     });
     session.record_memory_injection(
@@ -494,7 +490,6 @@ fn load_startup_stub_preserves_metadata_but_skips_heavy_vectors() -> Result<()> 
     assert_eq!(stub.reasoning_effort.as_deref(), Some("high"));
     assert_eq!(stub.provider_key.as_deref(), Some("openai"));
     assert_eq!(stub.route_api_method.as_deref(), Some("openai-api"));
-    assert!(stub.is_canary);
     assert!(stub.messages.is_empty());
     assert!(stub.env_snapshots.is_empty());
     assert!(stub.memory_injections.is_empty());
@@ -544,10 +539,7 @@ fn load_for_remote_startup_preserves_messages_and_replay_but_skips_heavy_vectors
         os: "linux".to_string(),
         arch: "x86_64".to_string(),
         pid: 123,
-        is_selfdev: false,
         is_debug: false,
-        is_canary: false,
-        testing_build: None,
         working_git: None,
     });
     session.record_memory_injection(

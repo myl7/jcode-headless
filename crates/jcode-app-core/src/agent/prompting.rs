@@ -78,13 +78,6 @@ impl Agent {
         &self,
         memory_prompt: Option<&str>,
     ) -> crate::prompt::SplitSystemPrompt {
-        if let Some(ref override_prompt) = self.system_prompt_override {
-            return crate::prompt::SplitSystemPrompt {
-                static_part: override_prompt.clone(),
-                dynamic_part: String::new(),
-            };
-        }
-
         let skills = self.current_skills_snapshot();
         let skill_prompt = self
             .active_skill
@@ -110,7 +103,6 @@ impl Agent {
         let (mut split, _context_info) = crate::prompt::build_system_prompt_split(
             skill_prompt.as_deref(),
             &available_skills,
-            self.session.is_canary,
             memory_prompt,
             working_dir.as_deref(),
         );
