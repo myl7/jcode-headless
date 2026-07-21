@@ -264,13 +264,12 @@ fn provider_add_subcommand_parses_agent_friendly_flags() {
     }
 }
 
-/// Contract test for the onboarding agent-repair brief (see
-/// `jcode-tui::tui::app::onboarding_repair::build_repair_brief`). The brief
-/// tells a coding agent to run these exact commands to diagnose and fix a
-/// failed login. If any flag here stops parsing, the brief would hand the agent
-/// a broken command, so this guards the agent-facing CLI contract.
+/// Contract test for the auth-repair commands that docs and error messages
+/// tell a coding agent to run when diagnosing or fixing a failed login. If any
+/// flag here stops parsing, those instructions would hand the agent a broken
+/// command, so this guards the agent-facing CLI contract.
 #[test]
-fn onboarding_repair_brief_commands_are_valid_cli() {
+fn auth_repair_commands_are_valid_cli() {
     // Diagnose.
     Args::try_parse_from(["jcode", "auth", "doctor"]).expect("auth doctor must parse");
     Args::try_parse_from(["jcode", "auth", "doctor", "openai", "--validate", "--json"])

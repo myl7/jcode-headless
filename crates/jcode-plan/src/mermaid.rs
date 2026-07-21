@@ -1,12 +1,9 @@
 //! Mermaid flowchart source generation for a swarm plan's task DAG.
 //!
-//! Lives in `jcode-plan` (rather than the TUI) so every consumer renders the
-//! same graph from the same logic: the TUI's inline plan-graph message, and
-//! the renderer stress probe in `jcode-tui-mermaid`
-//! (`examples/swarm_plan_stress.rs`) which feeds this exact output through the
-//! real mermaid pipeline. Status classification reuses
-//! [`summarize_plan_graph`], so node colors always agree with the scheduler's
-//! view of ready/blocked/active/done/failed.
+//! Lives in `jcode-plan` so every consumer renders the same graph from the
+//! same logic. Status classification reuses [`summarize_plan_graph`], so node
+//! colors always agree with the scheduler's view of
+//! ready/blocked/active/done/failed.
 //!
 //! This module only builds mermaid source; callers decide when to render it.
 

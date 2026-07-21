@@ -31,7 +31,6 @@ const PROGRESS_MARKER_PREFIX: &str = "JCODE_PROGRESS ";
 const CHECKPOINT_MARKER_PREFIX: &str = "JCODE_CHECKPOINT ";
 const BACKGROUND_PROGRESS_GUIDANCE: &str = "For long-running background commands, prefer scripts or commands that periodically print progress updates. Best format: print lines starting with `JCODE_PROGRESS ` followed by JSON like {\"percent\":42,\"message\":\"Running\"} or {\"current\":120,\"total\":1000,\"unit\":\"batches\",\"message\":\"Epoch 2/5\",\"eta_seconds\":30}. Supported JSON fields are `percent`, `message`, `current`, `total`, `unit`, `eta_seconds`, and optional `kind`=`indeterminate` or `kind`=`checkpoint`. For milestone-style wakeups, print `JCODE_CHECKPOINT {\"message\":\"Unit tests passed\"}`. Generic fallback output that can be parsed includes `42%`, `3/10 tests`, `3 of 10 steps`, `1.5/3.0 GiB`, or phase lines like `Compiling ...`, `Downloading ...`, `Running ...`, and `Building ...`. If you are writing the script yourself, add these progress/checkpoint lines explicitly. Put large temporary files, worktrees, and virtual environments under `$JCODE_SCRATCH_DIR`, not `/tmp`, because `/tmp` may be RAM-backed.";
 const BASH_TOOL_DESCRIPTION: &str = "Run a bash command. For long-running background commands, prefer scripts that emit progress/checkpoint lines. Print `JCODE_PROGRESS {json}` or `JCODE_CHECKPOINT {json}` lines for reliable reporting, or at least output parseable progress like `42%`, `3/10 tests`, `3 of 10 steps`, `1.5/3.0 GiB`, or `Running ...`. Put large temporary files and worktrees under `$JCODE_SCRATCH_DIR`, not `/tmp`, because `/tmp` may be RAM-backed.";
-const WINDOWS_SHELL_TOOL_DESCRIPTION: &str = "Run a shell command. For long-running background commands, prefer scripts that emit progress/checkpoint lines. Print `JCODE_PROGRESS {json}` or `JCODE_CHECKPOINT {json}` lines for reliable reporting, or at least output parseable progress like `42%`, `3/10 tests`, `3 of 10 steps`, `1.5/3.0 GiB`, or `Running ...`.";
 
 /// Build a clear timeout message. The `timeout` param is in milliseconds, which
 /// agents frequently mistake for seconds (e.g. passing 1000 thinking it means
@@ -449,7 +448,6 @@ async fn handle_background_output_line(
     file.flush().await.ok();
 }
 
-#[cfg(not(windows))]
 fn tool_scratch_dir() -> Option<std::path::PathBuf> {
     let dir = std::env::var_os("JCODE_SCRATCH_DIR")
         .filter(|value| !value.is_empty())
@@ -463,7 +461,6 @@ fn tool_scratch_dir() -> Option<std::path::PathBuf> {
     Some(dir)
 }
 
-#[cfg(not(windows))]
 fn configure_tool_scratch(command: &mut TokioCommand) {
     if let Some(dir) = tool_scratch_dir() {
         command.env("TMPDIR", &dir).env("JCODE_SCRATCH_DIR", dir);
@@ -496,19 +493,10 @@ impl Drop for ProcessGroupKillGuard {
 }
 
 fn build_shell_command(cmd_str: &str) -> TokioCommand {
-    #[cfg(windows)]
-    {
-        let mut cmd = TokioCommand::new("cmd.exe");
-        cmd.arg("/C").arg(cmd_str);
-        cmd
-    }
-    #[cfg(not(windows))]
-    {
-        let mut cmd = TokioCommand::new("bash");
-        cmd.arg("-c").arg(cmd_str);
-        configure_tool_scratch(&mut cmd);
-        cmd
-    }
+    let mut cmd = TokioCommand::new("bash");
+    cmd.arg("-c").arg(cmd_str);
+    configure_tool_scratch(&mut cmd);
+    cmd
 }
 
 #[cfg(unix)]
@@ -544,7 +532,6 @@ fn format_command_output(mut output: String, exit_code: Option<i32>) -> String {
 
 #[cfg(test)]
 mod utf8_truncation_tests {
-    #[cfg(any(windows, unix))]
     use super::build_shell_command;
     use super::format_command_output;
 
@@ -554,22 +541,6 @@ mod utf8_truncation_tests {
         let output = format_command_output(input, None);
         assert!(output.ends_with("\n... (output truncated)"));
         assert!(output.starts_with(&"a".repeat(29_999)));
-    }
-
-    #[cfg(windows)]
-    #[tokio::test]
-    async fn build_shell_command_uses_cmd_and_executes_command() {
-        let output = build_shell_command("echo hello-from-cmd")
-            .output()
-            .await
-            .expect("run cmd command");
-        assert!(output.status.success(), "cmd command should succeed");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            stdout.to_ascii_lowercase().contains("hello-from-cmd"),
-            "unexpected stdout: {}",
-            stdout
-        );
     }
 
     #[cfg(unix)]
@@ -624,19 +595,11 @@ impl Tool for BashTool {
     }
 
     fn description(&self) -> &str {
-        if cfg!(windows) {
-            WINDOWS_SHELL_TOOL_DESCRIPTION
-        } else {
-            BASH_TOOL_DESCRIPTION
-        }
+        BASH_TOOL_DESCRIPTION
     }
 
     fn parameters_schema(&self) -> Value {
-        let cmd_desc = if cfg!(windows) {
-            "The shell command to execute (via cmd.exe). If you write a long-running script or loop for run_in_background=true, make it print progress lines. Preferred format: `JCODE_PROGRESS {json}`."
-        } else {
-            "The bash command to execute. If you write a long-running script or loop for run_in_background=true, make it print progress lines. Preferred format: `JCODE_PROGRESS {json}`. Put large temporary files and worktrees under `$JCODE_SCRATCH_DIR`, not `/tmp`, because `/tmp` may be RAM-backed."
-        };
+        let cmd_desc = "The bash command to execute. If you write a long-running script or loop for run_in_background=true, make it print progress lines. Preferred format: `JCODE_PROGRESS {json}`. Put large temporary files and worktrees under `$JCODE_SCRATCH_DIR`, not `/tmp`, because `/tmp` may be RAM-backed.";
         json!({
             "type": "object",
             "required": ["command"],
@@ -1121,10 +1084,6 @@ impl BashTool {
 	                                        let _ = child.start_kill();
 	                                    }
 	                                }
-	                                #[cfg(not(unix))]
-	                                {
-	                                    let _ = child.start_kill();
-	                                }
 	                                break;
 	                            }
                             line = async {
@@ -1228,6 +1187,6 @@ impl BashTool {
     }
 }
 
-#[cfg(all(test, not(windows)))]
+#[cfg(test)]
 #[path = "bash_tests.rs"]
 mod tests;

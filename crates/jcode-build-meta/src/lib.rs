@@ -1,13 +1,8 @@
 //! Build and runtime version metadata for jcode.
 //!
 //! The build script (`build.rs`) computes git- and version-derived values and
-//! emits them via `cargo:rustc-env`. Most binaries use those compile-time values.
-//! A fast local release may wrap an already-built selfdev binary and set
-//! `JCODE_RUNTIME_RELEASE_SEMVER`; the accessor functions below then present the
-//! tagged release identity without recompiling the dependency graph solely to
-//! change version strings.
-
-use std::sync::OnceLock;
+//! emits them via `cargo:rustc-env`. All accessors below are thin wrappers over
+//! those compile-time values.
 
 /// Compile-time human-readable version string, e.g. `v0.14.6-dev (abc1234)`.
 pub const VERSION: &str = env!("JCODE_VERSION");
@@ -21,118 +16,45 @@ pub const GIT_TAG: &str = env!("JCODE_GIT_TAG");
 pub const SEMVER: &str = env!("JCODE_SEMVER");
 /// Compile-time base semver taken from the root `Cargo.toml` package version.
 pub const BASE_SEMVER: &str = env!("JCODE_BASE_SEMVER");
-/// Compile-time semver used for update comparisons.
-pub const UPDATE_SEMVER: &str = env!("JCODE_UPDATE_SEMVER");
-/// Encoded changelog (record/unit separated). See build.rs for the format.
-pub const CHANGELOG: &str = env!("JCODE_CHANGELOG");
 /// Compile-time root crate package version.
 pub const PKG_VERSION: &str = env!("JCODE_PKG_VERSION");
 
-static RUNTIME_RELEASE_SEMVER: OnceLock<Option<String>> = OnceLock::new();
-static RUNTIME_VERSION: OnceLock<Option<String>> = OnceLock::new();
-static RUNTIME_GIT_HASH: OnceLock<Option<String>> = OnceLock::new();
-static RUNTIME_GIT_DATE: OnceLock<Option<String>> = OnceLock::new();
-static RUNTIME_GIT_TAG: OnceLock<Option<String>> = OnceLock::new();
-
-fn parse_release_semver(value: &str) -> Option<String> {
-    let value = value.trim().trim_start_matches('v');
-    let mut parts = value.split('.');
-    let major = parts.next()?.parse::<u32>().ok()?;
-    let minor = parts.next()?.parse::<u32>().ok()?;
-    let patch = parts.next()?.parse::<u32>().ok()?;
-    if parts.next().is_some() {
-        return None;
-    }
-    Some(format!("{major}.{minor}.{patch}"))
-}
-
-/// Optional release semver supplied by the fast-release wrapper at process start.
-pub fn runtime_release_semver() -> Option<&'static str> {
-    RUNTIME_RELEASE_SEMVER
-        .get_or_init(|| {
-            std::env::var("JCODE_RUNTIME_RELEASE_SEMVER")
-                .ok()
-                .and_then(|value| parse_release_semver(&value))
-        })
-        .as_deref()
-}
-
-/// Human-readable runtime version, honoring a fast-release wrapper override.
+/// Human-readable build version.
 pub fn version() -> &'static str {
-    RUNTIME_VERSION
-        .get_or_init(|| {
-            runtime_release_semver().map(|semver| format!("v{semver} ({})", git_hash()))
-        })
-        .as_deref()
-        .unwrap_or(VERSION)
+    VERSION
 }
 
-fn runtime_identity_value(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-/// Runtime git hash, honoring the fast-release wrapper identity.
+/// Git hash of the build commit.
 pub fn git_hash() -> &'static str {
-    RUNTIME_GIT_HASH
-        .get_or_init(|| runtime_identity_value("JCODE_RUNTIME_RELEASE_GIT_HASH"))
-        .as_deref()
-        .unwrap_or(GIT_HASH)
+    GIT_HASH
 }
 
-/// Runtime git date, honoring the fast-release wrapper identity.
+/// Git date of the build commit.
 pub fn git_date() -> &'static str {
-    RUNTIME_GIT_DATE
-        .get_or_init(|| runtime_identity_value("JCODE_RUNTIME_RELEASE_GIT_DATE"))
-        .as_deref()
-        .unwrap_or(GIT_DATE)
+    GIT_DATE
 }
 
-/// Runtime git tag, honoring the fast-release wrapper identity.
+/// Git tag of the build commit.
 pub fn git_tag() -> &'static str {
-    RUNTIME_GIT_TAG
-        .get_or_init(|| runtime_identity_value("JCODE_RUNTIME_RELEASE_GIT_TAG"))
-        .as_deref()
-        .unwrap_or(GIT_TAG)
+    GIT_TAG
 }
 
-/// Runtime build semver, honoring a fast-release wrapper override.
+/// Build semver.
 pub fn semver() -> &'static str {
-    runtime_release_semver().unwrap_or(SEMVER)
+    SEMVER
 }
 
-/// Runtime base semver, honoring a fast-release wrapper override.
+/// Base semver from the root `Cargo.toml` package version.
 pub fn base_semver() -> &'static str {
-    runtime_release_semver().unwrap_or(BASE_SEMVER)
+    BASE_SEMVER
 }
 
-/// Runtime update-comparison semver, honoring a fast-release wrapper override.
-pub fn update_semver() -> &'static str {
-    runtime_release_semver().unwrap_or(UPDATE_SEMVER)
-}
-
-/// Runtime package version, honoring a fast-release wrapper override.
+/// Root crate package version.
 pub fn pkg_version() -> &'static str {
-    runtime_release_semver().unwrap_or(PKG_VERSION)
+    PKG_VERSION
 }
 
-/// Whether this process should behave as a release build.
+/// Whether this binary was built as a release build (`JCODE_RELEASE_BUILD=1`).
 pub fn is_release_build() -> bool {
-    option_env!("JCODE_RELEASE_BUILD").is_some() || runtime_release_semver().is_some()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_release_semver;
-
-    #[test]
-    fn runtime_release_semver_accepts_only_three_numeric_components() {
-        assert_eq!(parse_release_semver("v1.2.3").as_deref(), Some("1.2.3"));
-        assert_eq!(parse_release_semver(" 1.2.3 ").as_deref(), Some("1.2.3"));
-        assert_eq!(parse_release_semver("1.2"), None);
-        assert_eq!(parse_release_semver("1.2.3.4"), None);
-        assert_eq!(parse_release_semver("1.2.beta"), None);
-    }
+    option_env!("JCODE_RELEASE_BUILD").is_some()
 }

@@ -71,11 +71,6 @@ jcode-provider-copilot = { path = "../jcode-provider-copilot" }
 jcode-provider-openai = { path = "../jcode-provider-openai" }
 jcode-provider-openrouter = { path = "../jcode-provider-openrouter" }
 jcode-provider-gemini = { path = "../jcode-provider-gemini" }
-# NOTE: this foundation layer intentionally does NOT depend on any `jcode-tui-*`
-# crate. The two pure-data/string symbols it used to reach for (`ResumeTarget`,
-# `reasoning_line_markup`) were moved to `jcode-session-types` and
-# `jcode-render-core` respectively, so the layering inversion (foundation
-# depending on presentation) is gone.
 jcode-usage-types = { path = "../jcode-usage-types" }
 
 # Streaming
@@ -125,9 +120,6 @@ embeddings = ["dep:jcode-embedding"]
 # jcode-provider-bedrock (aws-sdk); forward there. Without it the Bedrock
 # provider still compiles but live calls return an explanatory error.
 bedrock = ["jcode-provider-bedrock/aws-sdk"]
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Power", "Win32_System_Threading"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 

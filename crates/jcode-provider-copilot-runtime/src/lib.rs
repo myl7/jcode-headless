@@ -1,7 +1,7 @@
 //! GitHub Copilot provider runtime (direct API with bearer-token exchange,
 //! tier detection, premium request modes), moved out of `jcode-base` so
 //! provider edits compile only this crate plus a binary relink instead of
-//! rebuilding the base -> app-core -> tui spine. The binary's composition
+//! rebuilding the base -> app-core spine. The binary's composition
 //! root registers [`CopilotApiProvider`] with `jcode_base::provider::external`
 //! at startup.
 

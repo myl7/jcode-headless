@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use clap::CommandFactory;
-use std::io::IsTerminal;
 use std::time::Instant;
 
 use super::args::{

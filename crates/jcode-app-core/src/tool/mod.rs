@@ -15,7 +15,6 @@ mod memory;
 mod multiedit;
 mod patch;
 mod read;
-pub(crate) mod serde_coerce;
 mod session_search;
 pub(crate) mod session_search_index;
 mod skill;

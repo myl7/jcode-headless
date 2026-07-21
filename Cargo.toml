@@ -105,10 +105,8 @@ jcode-build-meta = { path = "crates/jcode-build-meta" }
 # Headless application core. The root crate contains only the CLI composition
 # layer and re-exports this crate directly.
 jcode-app-core = { path = "crates/jcode-app-core", default-features = false }
-# `jcode provider-doctor` / provider diagnostics; sits downstream of jcode-base
-# so doctor edits do not rebuild the base -> app-core -> tui spine.
 # Gemini provider runtime; sits downstream of jcode-base so gemini edits do
-# not rebuild the base -> app-core -> tui spine. Registered with the external
+# not rebuild the base -> app-core spine. Registered with the external
 # provider registry at startup (src/cli/startup.rs).
 jcode-provider-gemini-runtime = { path = "crates/jcode-provider-gemini-runtime" }
 jcode-provider-cursor-runtime = { path = "crates/jcode-provider-cursor-runtime" }
@@ -143,9 +141,6 @@ embeddings = ["jcode-app-core/embeddings"]
 bedrock = ["jcode-app-core/bedrock"]
 # Internal release feature: build a supported OpenSSL inside the CentOS 7
 pdf = ["jcode-app-core/pdf"]
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [profile.release]
 opt-level = 1

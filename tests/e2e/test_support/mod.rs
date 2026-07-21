@@ -15,8 +15,6 @@ pub(crate) use jcode::server;
 pub(crate) use jcode::session::{Session, StoredCompactionState};
 pub(crate) use jcode::tool::Registry;
 pub(crate) use std::ffi::OsString;
-#[cfg(windows)]
-pub(crate) use std::process::{Child, Command, Stdio};
 pub(crate) use std::sync::Arc;
 pub(crate) use std::sync::Mutex;
 pub(crate) use std::time::{Duration, Instant};
@@ -25,14 +23,7 @@ pub(crate) use tokio::time::timeout;
 static JCODE_HOME_LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
 
 pub(crate) fn short_runtime_dir(name: String) -> std::path::PathBuf {
-    #[cfg(unix)]
-    {
-        std::path::PathBuf::from("/tmp").join(name)
-    }
-    #[cfg(not(unix))]
-    {
-        std::env::temp_dir().join(name)
-    }
+    std::path::PathBuf::from("/tmp").join(name)
 }
 
 fn lock_jcode_home() -> std::sync::MutexGuard<'static, ()> {
@@ -469,12 +460,6 @@ pub(crate) async fn wait_for_subscribed_server_client(
     Ok(client)
 }
 
-#[cfg(windows)]
-pub(crate) fn kill_child(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
 #[cfg(unix)]
 pub(crate) fn current_process_cpu_time() -> Result<Duration> {
     let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
@@ -487,11 +472,6 @@ pub(crate) fn current_process_cpu_time() -> Result<Duration> {
         Duration::from_secs(tv.tv_sec as u64) + Duration::from_micros(tv.tv_usec as u64)
     };
     Ok(to_duration(usage.ru_utime) + to_duration(usage.ru_stime))
-}
-
-#[cfg(not(unix))]
-pub(crate) fn current_process_cpu_time() -> Result<Duration> {
-    Ok(Duration::ZERO)
 }
 
 pub(crate) fn abort_server_and_cleanup<T>(

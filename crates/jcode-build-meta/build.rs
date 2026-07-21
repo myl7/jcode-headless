@@ -24,11 +24,6 @@ fn main() {
     });
     let (major, minor, patch) = parse_semver(&build_semver).unwrap_or(base_version);
     let base_semver = format!("{}.{}.{}", base_version.0, base_version.1, base_version.2);
-    let update_semver = if explicit_build_semver_override().is_some() {
-        build_semver.clone()
-    } else {
-        base_semver.clone()
-    };
 
     let git_hash = env_or_metadata_or_git(
         &repo_root,
@@ -76,40 +71,6 @@ fn main() {
     )
     .unwrap_or_default();
 
-    // Get recent commit messages with commit timestamps and version tag decorations.
-    // Format: "hash|timestamp|decorations|subject" per line.
-    // We embed a deeper window so /changelog can cover many more releases.
-    let raw_log = std::env::var("JCODE_BUILD_CHANGELOG_RAW")
-        .ok()
-        .or_else(|| metadata_value("changelog_raw"))
-        .or_else(|| git_output(&repo_root, ["log", "-700", "--format=%h|%ct|%D|%s"]))
-        .unwrap_or_default();
-
-    // Normalize to "hash<RS>tag<RS>timestamp<RS>subject" — extract version tag or
-    // leave empty. We use ASCII record/unit separators so fields can safely
-    // contain punctuation.
-    let changelog = raw_log
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.splitn(4, '|');
-            let hash = parts.next()?;
-            let timestamp = parts.next().unwrap_or("");
-            let decorations = parts.next().unwrap_or("");
-            let subject = parts.next()?;
-            let tag = decorations
-                .split(',')
-                .map(|d| d.trim())
-                .find(|d| d.starts_with("tag: v"))
-                .and_then(|d| d.strip_prefix("tag: "))
-                .unwrap_or("");
-            Some(format!(
-                "{}\x1e{}\x1e{}\x1e{}",
-                hash, tag, timestamp, subject
-            ))
-        })
-        .collect::<Vec<_>>()
-        .join("\x1f");
-
     // Build version string:
     //   Release: v0.2.17 (abc1234)
     //   Dev:     v0.2.17-dev (abc1234)
@@ -129,9 +90,7 @@ fn main() {
     println!("cargo:rustc-env=JCODE_VERSION={}", version);
     println!("cargo:rustc-env=JCODE_SEMVER={}", build_semver);
     println!("cargo:rustc-env=JCODE_BASE_SEMVER={}", base_semver);
-    println!("cargo:rustc-env=JCODE_UPDATE_SEMVER={}", update_semver);
     println!("cargo:rustc-env=JCODE_GIT_TAG={}", git_tag);
-    println!("cargo:rustc-env=JCODE_CHANGELOG={}", changelog);
     println!("cargo:rustc-env=JCODE_PKG_VERSION={}", pkg_version);
 
     // Forward JCODE_RELEASE_BUILD env var if set (CI sets this for release binaries)
@@ -148,7 +107,7 @@ fn main() {
     // output file, reruns it, and then force-recompiles every dependent crate
     // via StaleDepFingerprint -- even when the emitted output is byte-identical.
     // Since `jcode-build-meta` sits at the bottom of the crate graph
-    // (base -> app-core -> tui -> cli all depend on it), watching the git files
+    // (base -> app-core -> cli all depend on it), watching the git files
     // turned routine git activity into a full-tree recompile (~18s) on every
     // incremental build. See the deterministic-semver note in
     // `resolve_build_semver` for the companion fix.
@@ -244,7 +203,7 @@ fn resolve_build_semver(base_version: (u32, u32, u32)) -> Result<String, String>
     // change (any `git add`, commit, or concurrent agent git op), that side
     // effect churned the version string on essentially every build, which in
     // turn invalidated `jcode-build-meta` and force-recompiled the entire crate
-    // graph (base -> app-core -> tui -> cli). Deriving the value deterministically
+    // graph (base -> app-core -> cli). Deriving the value deterministically
     // keeps incremental rebuilds incremental.
     let offset = commits_since_base_tag(base_version).unwrap_or(0);
     let patch = base_version.2.saturating_add(offset);

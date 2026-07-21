@@ -209,11 +209,6 @@ fn parent_pid() -> Option<u32> {
     (ppid > 0).then_some(ppid as u32)
 }
 
-#[cfg(not(unix))]
-fn parent_pid() -> Option<u32> {
-    None
-}
-
 #[cfg(unix)]
 pub(crate) fn process_alive(pid: u32) -> bool {
     if pid == 0 {
@@ -229,11 +224,6 @@ pub(crate) fn process_alive(pid: u32) -> bool {
         std::io::Error::last_os_error().raw_os_error(),
         Some(libc::EPERM)
     )
-}
-
-#[cfg(not(unix))]
-pub(crate) fn process_alive(_pid: u32) -> bool {
-    true
 }
 
 #[cfg(test)]

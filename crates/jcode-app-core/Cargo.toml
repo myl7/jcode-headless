@@ -7,7 +7,7 @@ publish = false
 # Application core for jcode: all non-presentation modules (server, agent,
 # provider, auth, session, tool, config, etc.) extracted out of the monolithic
 # root `jcode` crate so they compile as a separate rustc unit. The root `jcode`
-# crate (cli + tui + bin) re-exports this crate's modules via `pub use
+# crate (cli + bin) re-exports this crate's modules via `pub use
 # jcode_app_core::*`, preserving every existing `crate::<module>` path.
 
 [lib]
@@ -58,10 +58,6 @@ rand = "0.9.3"
 url = "2"
 jcode-agent-runtime = { path = "../jcode-agent-runtime" }
 jcode-provider-core = { path = "../jcode-provider-core" }
-# NOTE: jcode-app-core does NOT depend on any jcode-tui-* crate. They were
-# unused dead dependency edges here (the TUI declares them itself). Removing
-# them stops a jcode-tui-* edit from cascading a recompile through app-core.
-
 # Streaming
 tokio-stream = "0.1"
 
@@ -103,13 +99,10 @@ pdf = ["dep:jcode-pdf"]
 test-support = ["jcode-base/test-support"]
 
 [dev-dependencies]
-# Used by async streaming tests (ambient/runner_tests, server/client_actions_tests).
+# Used by async streaming tests (server/client_actions_tests).
 async-stream = "0.3"
 # Enables jcode-base's test-support helpers (storage::lock_test_env,
 # auth::test_sandbox, bus::reset_models_updated_publish_state_for_tests) for
 # *this* crate's own test target. Feature unification applies this only to
 # test/bench/example builds, not to a normal `cargo build`.
 jcode-base = { path = "../jcode-base", default-features = false, features = ["test-support"] }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }

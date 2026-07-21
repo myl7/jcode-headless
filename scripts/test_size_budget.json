@@ -10,7 +10,7 @@
     "crates/jcode-base/src/session_tests/cases.rs": 2329,
     "crates/jcode-plan/src/dag/tests.rs": 1392,
     "crates/jcode-provider-anthropic-runtime/src/anthropic_tests.rs": 1853,
-    "crates/jcode-provider-openrouter-runtime/src/openrouter_tests.rs": 2979
+    "crates/jcode-provider-openrouter-runtime/src/openrouter_tests.rs": 2975
   },
   "version": 1
 }

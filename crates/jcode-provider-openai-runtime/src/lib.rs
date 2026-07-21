@@ -1,7 +1,7 @@
 //! OpenAI provider runtime (Codex OAuth + API key, Responses API over SSE and
 //! persistent WebSocket), moved out of `jcode-base` so provider edits compile
 //! only this crate plus a binary relink instead of rebuilding the
-//! base -> app-core -> tui spine. The binary's composition root registers
+//! base -> app-core spine. The binary's composition root registers
 //! [`OpenAIProvider`] with `jcode_base::provider::external` at startup.
 //!
 //! Model-catalog/account-availability state stays in `jcode_base::provider`

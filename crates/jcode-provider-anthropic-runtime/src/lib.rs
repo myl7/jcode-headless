@@ -1,7 +1,7 @@
 //! Direct Anthropic Messages API provider runtime (OAuth subscription + API
 //! key, SSE streaming, service tiers, reasoning efforts), moved out of
 //! `jcode-base` so provider edits compile only this crate plus a binary
-//! relink instead of rebuilding the base -> app-core -> tui spine. The
+//! relink instead of rebuilding the base -> app-core spine. The
 //! binary's composition root registers [`AnthropicProvider`] with
 //! `jcode_base::provider::external` at startup.
 //!

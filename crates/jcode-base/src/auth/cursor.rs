@@ -244,13 +244,8 @@ fn cursor_vscdb_paths() -> Vec<PathBuf> {
         "Library/Application Support/Cursor/User/globalStorage/state.vscdb",
         "Library/Application Support/cursor/User/globalStorage/state.vscdb",
     ];
-    #[cfg(target_os = "windows")]
-    let relatives = [
-        "AppData/Roaming/Cursor/User/globalStorage/state.vscdb",
-        "AppData/Roaming/cursor/User/globalStorage/state.vscdb",
-    ];
     // Other Unix platforms (e.g. FreeBSD) follow the XDG-style layout like Linux.
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     let relatives = [
         ".config/Cursor/User/globalStorage/state.vscdb",
         ".config/cursor/User/globalStorage/state.vscdb",
@@ -363,22 +358,13 @@ fn config_file_path() -> Result<PathBuf> {
 
 /// Resolve Cursor CLI/device-login auth file path.
 pub fn cursor_auth_file_path() -> Result<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        let appdata = std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .or_else(|| crate::storage::user_home_path("AppData/Roaming").ok())
-            .ok_or_else(|| anyhow::anyhow!("No APPDATA directory found"))?;
-        return Ok(appdata.join("Cursor").join("auth.json"));
-    }
-
     #[cfg(target_os = "macos")]
     {
         return crate::storage::user_home_path(".cursor/auth.json")
             .context("No home directory found for Cursor auth.json");
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[cfg(not(target_os = "macos"))]
     {
         // Honor JCODE_HOME isolation (used by the onboarding sandbox and tests)
         // the same way every other external-CLI auth detector does. Without this,

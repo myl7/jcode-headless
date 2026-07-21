@@ -9,5 +9,3 @@ mod test_support;
 mod burst_spawn;
 mod provider_behavior;
 mod session_flow;
-#[cfg(windows)]
-mod windows_lifecycle;

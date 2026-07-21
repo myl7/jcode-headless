@@ -142,14 +142,6 @@ fn process_is_running(pid: u32) -> bool {
     result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
-#[cfg(not(unix))]
-fn process_is_running(pid: u32) -> bool {
-    // Best-effort fallback for platforms where this low-level storage crate does
-    // not have a process API. The active PID file is still useful, and stale
-    // entries are cleaned up by higher-level session lifecycle code.
-    pid != 0
-}
-
 /// Live snapshot of how many jcode sessions are running, and how many of those
 /// are actively streaming a model response right now. Used by the menu bar
 /// indicator (`jcode menubar`) and any other presence UI.

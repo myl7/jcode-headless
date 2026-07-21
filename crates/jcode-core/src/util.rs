@@ -139,14 +139,6 @@ pub fn process_fd_diagnostic_snapshot() -> String {
             pid, total, soft_limit, hard_limit, sockets, pipes, anon, chars, regs, dirs, other
         )
     }
-
-    #[cfg(not(unix))]
-    {
-        format!(
-            "pid={} fd snapshot unsupported on this platform",
-            std::process::id()
-        )
-    }
 }
 
 #[cfg(test)]

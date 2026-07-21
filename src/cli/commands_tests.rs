@@ -1,5 +1,4 @@
 use super::*;
-use crate::auth::{AuthState, AuthStatus, ProviderAuth};
 use crate::message::{Message, StreamEvent, ToolDefinition};
 use crate::provider::ModelRoute;
 use crate::provider::{EventStream, Provider};
@@ -526,7 +525,6 @@ fn version_command_plain_output_includes_core_fields() {
         version: "v1.2.3 (abc1234)".to_string(),
         semver: "1.2.3".to_string(),
         base_semver: "1.2.0".to_string(),
-        update_semver: "1.2.0".to_string(),
         git_hash: "abc1234".to_string(),
         git_tag: "v1.2.3".to_string(),
         build_time: "2026-03-18 18:00:00 +0000".to_string(),
@@ -534,11 +532,10 @@ fn version_command_plain_output_includes_core_fields() {
         release_build: false,
     };
     let text = format!(
-        "version\t{}\nsemver\t{}\nbase_semver\t{}\nupdate_semver\t{}\ngit_hash\t{}\ngit_tag\t{}\nbuild_time\t{}\ngit_date\t{}\nrelease_build\t{}\n",
+        "version\t{}\nsemver\t{}\nbase_semver\t{}\ngit_hash\t{}\ngit_tag\t{}\nbuild_time\t{}\ngit_date\t{}\nrelease_build\t{}\n",
         report.version,
         report.semver,
         report.base_semver,
-        report.update_semver,
         report.git_hash,
         report.git_tag,
         report.build_time,

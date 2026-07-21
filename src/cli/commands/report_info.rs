@@ -106,7 +106,6 @@ pub(super) struct VersionReport {
     pub(super) version: String,
     pub(super) semver: String,
     pub(super) base_semver: String,
-    pub(super) update_semver: String,
     pub(super) git_hash: String,
     pub(super) git_tag: String,
     pub(super) build_time: String,
@@ -417,7 +416,6 @@ pub(super) fn run_version_command(emit_json: bool) -> Result<()> {
         version: jcode_build_meta::version().to_string(),
         semver: jcode_build_meta::semver().to_string(),
         base_semver: jcode_build_meta::base_semver().to_string(),
-        update_semver: jcode_build_meta::update_semver().to_string(),
         git_hash: jcode_build_meta::git_hash().to_string(),
         git_tag: jcode_build_meta::git_tag().to_string(),
         build_time: std::env::current_exe()
@@ -437,7 +435,6 @@ pub(super) fn run_version_command(emit_json: bool) -> Result<()> {
         println!("version\t{}", report.version);
         println!("semver\t{}", report.semver);
         println!("base_semver\t{}", report.base_semver);
-        println!("update_semver\t{}", report.update_semver);
         println!("git_hash\t{}", report.git_hash);
         println!("git_tag\t{}", report.git_tag);
         println!("build_time\t{}", report.build_time);
