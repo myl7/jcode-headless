@@ -92,10 +92,7 @@ cargo build --locked --release --no-default-features --bin jcode
 
 ---
 
-*Everything below this line is the original upstream README from
-[1jehuang/jcode](https://github.com/1jehuang/jcode), preserved unchanged.*
-
----
+*The upstream README follows.*
 
 <div align="center">
 
