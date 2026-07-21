@@ -1,11 +1,9 @@
 # jcode-headless
 
-This repository is a fork of [1jehuang/jcode](https://github.com/1jehuang/jcode).
-All of the design, features, and the original README below are the upstream
-author's work. This fork only rebuilds jcode into a **headless coding-agent
-runtime** for Docker, CI, background workers, and local Unix-socket automation.
-It intentionally does not ship a TUI, desktop app, browser login, remote web UI,
-or interactive REPL.
+A fork of [1jehuang/jcode](https://github.com/1jehuang/jcode) that rebuilds it
+into a **headless coding-agent runtime** for Docker, CI, background workers, and
+local Unix-socket automation. It intentionally does not ship a TUI, desktop app,
+browser login, remote web UI, or interactive REPL.
 
 ## What this fork changes
 
