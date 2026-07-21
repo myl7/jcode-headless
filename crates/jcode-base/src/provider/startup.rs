@@ -125,25 +125,8 @@ impl MultiProvider {
         let has_bedrock_creds = bedrock::BedrockProvider::has_credentials();
         let has_openrouter_creds = openrouter::has_credentials();
 
-        let use_claude_cli = std::env::var("JCODE_USE_CLAUDE_CLI")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
-        if use_claude_cli {
-            crate::logging::warn(
-                "JCODE_USE_CLAUDE_CLI is deprecated and will be removed. Direct Anthropic API transport is the default.",
-            );
-        }
-
-        let claude = if has_claude_creds && use_claude_cli {
-            crate::logging::info(
-                "Using deprecated Claude CLI provider (forced by JCODE_USE_CLAUDE_CLI=1)",
-            );
-            external::instantiate_expected_external_provider(external::CLAUDE_CLI_RUNTIME)
-        } else {
-            None
-        };
-
-        let anthropic = if has_claude_creds && !use_claude_cli {
+        let claude = None;
+        let anthropic = if has_claude_creds {
             external::instantiate_expected_external_provider(external::ANTHROPIC_RUNTIME)
         } else {
             None
@@ -310,7 +293,7 @@ impl MultiProvider {
             openai_compatible_profiles: RwLock::new(HashMap::new()),
             active_openai_compatible_profile: RwLock::new(None),
             active: RwLock::new(active),
-            use_claude_cli,
+            use_claude_cli: false,
             startup_notices: RwLock::new(Vec::new()),
             forced_provider,
             routes_memo: Mutex::new(None),

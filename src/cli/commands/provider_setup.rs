@@ -285,14 +285,7 @@ fn validate_profile_name(raw: &str) -> Result<String> {
 }
 
 fn ensure_profile_name_not_reserved(name: &str) -> Result<()> {
-    const RESERVED_PROVIDER_NAMES: &[&str] = &[
-        "auto",
-        "claude-subprocess",
-        "compat",
-        "custom",
-        "azure-openai",
-        "aoai",
-    ];
+    const RESERVED_PROVIDER_NAMES: &[&str] = &["auto", "compat", "custom", "azure-openai", "aoai"];
     if resolve_login_provider(name).is_some()
         || RESERVED_PROVIDER_NAMES
             .iter()

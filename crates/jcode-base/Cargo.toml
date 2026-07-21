@@ -76,7 +76,6 @@ jcode-provider-gemini = { path = "../jcode-provider-gemini" }
 # `reasoning_line_markup`) were moved to `jcode-session-types` and
 # `jcode-render-core` respectively, so the layering inversion (foundation
 # depending on presentation) is gone.
-jcode-render-core = { path = "../jcode-render-core" }
 jcode-usage-types = { path = "../jcode-usage-types" }
 
 # Streaming

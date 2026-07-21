@@ -20,11 +20,6 @@ pub enum ProviderChoice {
     Claude,
     #[value(alias = "claude-api", alias = "anthropic-key", alias = "claude-key")]
     AnthropicApi,
-    #[deprecated(
-        note = "Claude Code CLI subprocess transport is deprecated; use ProviderChoice::Claude for native Anthropic OAuth/API transport"
-    )]
-    #[value(alias = "claude-subprocess", hide = true)]
-    ClaudeSubprocess,
     Openai,
     #[value(
         alias = "openai-key",
@@ -124,7 +119,6 @@ impl ProviderChoice {
             Self::Jcode => "jcode",
             Self::Claude => "claude",
             Self::AnthropicApi => "anthropic-api",
-            Self::ClaudeSubprocess => "claude-subprocess",
             Self::Openai => "openai",
             Self::OpenaiApi => "openai-api",
             Self::Openrouter => "openrouter",
@@ -186,10 +180,6 @@ const PROVIDER_CHOICE_LOGIN_PROVIDERS: &[(ProviderChoice, LoginProviderDescripto
     (
         ProviderChoice::AnthropicApi,
         crate::provider_catalog::ANTHROPIC_API_LOGIN_PROVIDER,
-    ),
-    (
-        ProviderChoice::ClaudeSubprocess,
-        crate::provider_catalog::CLAUDE_LOGIN_PROVIDER,
     ),
     (
         ProviderChoice::Openai,
@@ -376,7 +366,6 @@ pub fn profile_for_choice(choice: &ProviderChoice) -> Option<OpenAiCompatiblePro
     }
 }
 
-#[allow(deprecated)]
 pub fn login_provider_for_choice(choice: &ProviderChoice) -> Option<LoginProviderDescriptor> {
     PROVIDER_CHOICE_LOGIN_PROVIDERS
         .iter()
@@ -384,13 +373,10 @@ pub fn login_provider_for_choice(choice: &ProviderChoice) -> Option<LoginProvide
         .map(|(_, provider)| *provider)
 }
 
-#[allow(deprecated)]
 pub fn choice_for_login_provider(provider: LoginProviderDescriptor) -> Option<ProviderChoice> {
     PROVIDER_CHOICE_LOGIN_PROVIDERS
         .iter()
-        .find(|(choice, candidate)| {
-            candidate.id == provider.id && !matches!(choice, ProviderChoice::ClaudeSubprocess)
-        })
+        .find(|(_, candidate)| candidate.id == provider.id)
         .map(|(choice, _)| *choice)
 }
 
@@ -805,19 +791,6 @@ async fn init_provider_with_options(
             disable_subscription_runtime_mode();
             ensure_external_api_key_auth_allowed_for_explicit_choice("ANTHROPIC_API_KEY")?;
             init_notice("Using Anthropic API key provider (provider locked)");
-            lock_model_provider("claude");
-            Arc::new(provider::MultiProvider::with_preference_fast(false))
-        }
-        ProviderChoice::ClaudeSubprocess => {
-            disable_subscription_runtime_mode();
-            ensure_claude_auth_allowed_for_explicit_choice()?;
-            crate::logging::warn(
-                "Using --provider claude-subprocess is deprecated and will be removed. Prefer `--provider claude`.",
-            );
-            crate::env::set_var("JCODE_USE_CLAUDE_CLI", "1");
-            init_notice(
-                "Using deprecated Claude subprocess transport (legacy compatibility mode; provider locked)",
-            );
             lock_model_provider("claude");
             Arc::new(provider::MultiProvider::with_preference_fast(false))
         }

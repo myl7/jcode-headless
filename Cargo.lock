@@ -2345,7 +2345,6 @@ dependencies = [
  "jcode-build-meta",
  "jcode-provider-anthropic-runtime",
  "jcode-provider-antigravity-runtime",
- "jcode-provider-claude-cli-runtime",
  "jcode-provider-copilot-runtime",
  "jcode-provider-cursor-runtime",
  "jcode-provider-doctor",
@@ -2494,7 +2493,6 @@ dependencies = [
  "jcode-provider-openai",
  "jcode-provider-openrouter",
  "jcode-provider-openrouter-runtime",
- "jcode-render-core",
  "jcode-session-types",
  "jcode-storage",
  "jcode-task-types",
@@ -2774,22 +2772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jcode-provider-claude-cli-runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "jcode-base",
- "jcode-message-types",
- "jcode-provider-core",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
 name = "jcode-provider-copilot"
 version = "0.1.0"
 dependencies = [
@@ -3007,15 +2989,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml",
-]
-
-[[package]]
-name = "jcode-render-core"
-version = "0.1.0"
-dependencies = [
- "pulldown-cmark",
- "serde",
- "unicode-width",
 ]
 
 [[package]]

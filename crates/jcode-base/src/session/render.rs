@@ -7,6 +7,36 @@ pub use jcode_session_types::{
 };
 use std::collections::HashMap;
 
+/// Invisible separator placed just inside both ends of a reasoning emphasis run.
+pub(crate) const REASONING_SENTINEL: &str = "\u{2063}";
+
+fn escape_reasoning_inline_markdown(line: &str) -> String {
+    let mut out = String::with_capacity(line.len() + 8);
+    for ch in line.chars() {
+        match ch {
+            '\\' | '*' | '_' | '`' | '[' | ']' | '<' | '>' | '&' | '~' | '|' | '$' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Wrap a completed reasoning line as dim and italic markdown.
+pub(crate) fn reasoning_line_markup(line: &str) -> String {
+    if line.is_empty() {
+        "\n".to_string()
+    } else {
+        format!(
+            "*{0}{1}{0}*  \n",
+            REASONING_SENTINEL,
+            escape_reasoning_inline_markdown(line)
+        )
+    }
+}
+
 /// Number of compacted historical messages shown by default in the UI.
 ///
 /// Compaction still keeps older history out of the active model context, but
@@ -40,7 +70,7 @@ fn format_reasoning_markup(text: &str) -> String {
     }
     let mut out = String::new();
     for line in text.split('\n') {
-        out.push_str(&jcode_render_core::reasoning_line_markup(line));
+        out.push_str(&reasoning_line_markup(line));
     }
     // Blank line terminates the reasoning block.
     out.push('\n');

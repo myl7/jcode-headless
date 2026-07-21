@@ -5,7 +5,6 @@ pub mod anthropic;
 pub mod antigravity;
 pub mod bedrock;
 mod catalog_routes;
-pub mod claude;
 pub mod copilot;
 pub mod cursor;
 mod dispatch;
@@ -1204,19 +1203,7 @@ impl MultiProvider {
         // using cheap local probes to hot-initialize newly configured providers.
         crate::auth::AuthStatus::invalidate_cache();
 
-        if self.use_claude_cli {
-            if self.claude_provider().is_none()
-                && crate::auth::claude::load_credentials().is_ok()
-                && let Some(claude) =
-                    external::instantiate_expected_external_provider(external::CLAUDE_CLI_RUNTIME)
-            {
-                crate::logging::info("Hot-initialized Claude CLI provider after auth change");
-                *self
-                    .claude
-                    .write()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(claude);
-            }
-        } else if self.anthropic_provider().is_none()
+        if self.anthropic_provider().is_none()
             && (crate::auth::claude::load_credentials().is_ok()
                 || crate::provider_catalog::load_api_key_from_env_or_config(
                     "ANTHROPIC_API_KEY",
@@ -2601,12 +2588,7 @@ impl Provider for MultiProvider {
         let current_model = self.model();
         let active = self.active_provider();
 
-        let claude = if matches!(active, ActiveProvider::Claude) && self.claude_provider().is_some()
-        {
-            external::instantiate_expected_external_provider(external::CLAUDE_CLI_RUNTIME)
-        } else {
-            None
-        };
+        let claude = None;
         let anthropic = if self.anthropic_provider().is_some() {
             external::instantiate_expected_external_provider(external::ANTHROPIC_RUNTIME)
         } else {
