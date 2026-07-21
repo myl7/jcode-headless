@@ -39,23 +39,17 @@ glob = "0.3"
 similar = "2"            # diffing for edits
 
 # Utilities
-dirs = "5"               # home directory
 anyhow = "1"
 libc = "0.2"             # Unix system calls (flock)
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 urlencoding = "2"        # URL encoding for web search
-uuid = { version = "1", features = ["v4", "v5"] }
 
 # Embeddings (local inference) live in jcode-base; this crate forwards the
 # `embeddings` feature to jcode-base rather than depending on jcode-embedding.
 jcode-import-core = { path = "../jcode-import-core" }
 
-# OAuth
 base64 = "0.22"
-sha2 = "0.10"
-rand = "0.9.3"
-url = "2"
 jcode-agent-runtime = { path = "../jcode-agent-runtime" }
 jcode-provider-core = { path = "../jcode-provider-core" }
 # Streaming

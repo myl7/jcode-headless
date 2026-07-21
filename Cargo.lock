@@ -2256,7 +2256,6 @@ dependencies = [
  "clap",
  "dirs",
  "futures",
- "hex",
  "jcode-app-core",
  "jcode-build-meta",
  "jcode-provider-anthropic-runtime",
@@ -2267,11 +2266,9 @@ dependencies = [
  "jcode-provider-openai-runtime",
  "jcode-provider-openrouter-runtime",
  "libc",
- "reqwest 0.12.28",
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tempfile",
  "tikv-jemallocator",
  "tokio",
@@ -2297,7 +2294,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
- "dirs",
  "futures",
  "glob",
  "jcode-agent-runtime",
@@ -2315,20 +2311,16 @@ dependencies = [
  "jcode-tool-core",
  "jcode-tool-types",
  "libc",
- "rand 0.9.3",
  "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "similar",
  "tempfile",
  "tokio",
  "tokio-stream",
  "tokio-util",
- "url",
  "urlencoding",
- "uuid",
 ]
 
 [[package]]
@@ -2894,7 +2886,6 @@ name = "jcode-usage-types"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
 ]
 
 [[package]]
