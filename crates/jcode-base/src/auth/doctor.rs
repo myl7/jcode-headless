@@ -3,35 +3,6 @@ use crate::provider_catalog::LoginProviderDescriptor;
 
 pub const VALIDATION_STALE_AFTER_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
-/// True when `jcode provider-doctor` has a native-runtime driver for
-/// `provider_id` (a provider whose live path is not OpenAI-compatible and so
-/// cannot be exercised by the generic OpenAI-compatible doctor). Today this is
-/// the Claude OAuth/subscription provider, the Antigravity (Google OAuth Cloud
-/// Code) provider, and the generic native-runtime providers (OpenAI, Gemini,
-/// Cursor, Copilot, Bedrock, jcode, Azure OpenAI).
-///
-/// The drivers themselves live downstream in the `jcode-provider-doctor`
-/// crate (which re-exports this predicate); this roster lives here so
-/// `live_tests` can annotate the monitoring roster without depending on that
-/// crate. A sync test in `jcode-provider-doctor` asserts this list matches its
-/// `NativeProviderKind` specs.
-pub fn native_doctor_supports_provider(provider_id: &str) -> bool {
-    matches!(
-        crate::auth::lifecycle::normalized_auth_provider_id(Some(provider_id)),
-        Some(
-            "claude"
-                | "antigravity"
-                | "openai"
-                | "gemini"
-                | "cursor"
-                | "copilot"
-                | "bedrock"
-                | "jcode"
-                | "azure-openai"
-        )
-    )
-}
-
 pub fn validation_is_stale(checked_at_ms: i64) -> bool {
     let now_ms = chrono::Utc::now().timestamp_millis();
     now_ms.saturating_sub(checked_at_ms) > VALIDATION_STALE_AFTER_MS
@@ -167,15 +138,15 @@ pub fn recommended_actions(
     if assessment.state != AuthState::NotConfigured {
         match assessment.last_validation.as_ref() {
             None => actions.push(format!(
-                "Run runtime verification: jcode auth-test --provider {}",
+                "Run runtime verification: jcode auth doctor {} --validate",
                 provider.id
             )),
             Some(record) if !record.success => actions.push(format!(
-                "Inspect runtime readiness: jcode auth-test --provider {}",
+                "Inspect runtime readiness: jcode auth doctor {} --validate",
                 provider.id
             )),
             Some(record) if validation_is_stale(record.checked_at_ms) => actions.push(format!(
-                "Refresh stale runtime verification: jcode auth-test --provider {}",
+                "Refresh stale runtime verification: jcode auth doctor {} --validate",
                 provider.id
             )),
             Some(_) => {}
@@ -184,7 +155,7 @@ pub fn recommended_actions(
 
     if validation_result.is_some_and(|value| value != "validation passed") {
         actions.push(format!(
-            "Re-run detailed auth diagnostics: jcode auth-test --provider {}",
+            "Re-run detailed auth diagnostics: jcode auth doctor {} --validate",
             provider.id
         ));
     }

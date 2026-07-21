@@ -2263,7 +2263,6 @@ dependencies = [
  "jcode-provider-antigravity-runtime",
  "jcode-provider-copilot-runtime",
  "jcode-provider-cursor-runtime",
- "jcode-provider-doctor",
  "jcode-provider-gemini-runtime",
  "jcode-provider-openai-runtime",
  "jcode-provider-openrouter-runtime",
@@ -2706,27 +2705,6 @@ dependencies = [
  "tokio-stream",
  "uuid",
  "webpki-roots",
-]
-
-[[package]]
-name = "jcode-provider-doctor"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "jcode-base",
- "jcode-provider-anthropic-runtime",
- "jcode-provider-antigravity-runtime",
- "jcode-provider-copilot-runtime",
- "jcode-provider-cursor-runtime",
- "jcode-provider-gemini-runtime",
- "jcode-provider-metadata",
- "jcode-provider-openai-runtime",
- "jcode-provider-openrouter-runtime",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

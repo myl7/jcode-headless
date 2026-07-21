@@ -46,7 +46,7 @@ pub(crate) struct ProviderSetupReport {
     auth: String,
     default_set: bool,
     run_command: String,
-    auth_test_command: String,
+    validate_command: String,
 }
 
 pub(crate) fn run_provider_add_command(options: ProviderAddOptions) -> Result<()> {
@@ -83,7 +83,7 @@ pub(crate) fn run_provider_add_command(options: ProviderAddOptions) -> Result<()
         }
         println!();
         println!("Run:       {}", report.run_command);
-        println!("Validate:  {}", report.auth_test_command);
+        println!("Validate:  {}", report.validate_command);
     }
 
     Ok(())
@@ -244,8 +244,8 @@ pub(crate) fn configure_provider_profile(
             shell_quote(&name),
             shell_quote(&model)
         ),
-        auth_test_command: format!(
-            "jcode --provider-profile {} auth-test --prompt {}",
+        validate_command: format!(
+            "jcode --provider-profile {} run --json {}",
             shell_quote(&name),
             shell_quote("Reply exactly JCODE_PROVIDER_SETUP_OK")
         ),

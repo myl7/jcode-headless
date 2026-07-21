@@ -272,11 +272,9 @@ fn provider_add_subcommand_parses_agent_friendly_flags() {
 #[test]
 fn onboarding_repair_brief_commands_are_valid_cli() {
     // Diagnose.
-    Args::try_parse_from(["jcode", "auth-test", "--provider", "openai", "--json"])
-        .expect("auth-test --provider --json must parse");
-    Args::try_parse_from(["jcode", "auth-test", "--all-configured", "--json"])
-        .expect("auth-test --all-configured --json must parse");
     Args::try_parse_from(["jcode", "auth", "doctor"]).expect("auth doctor must parse");
+    Args::try_parse_from(["jcode", "auth", "doctor", "openai", "--validate", "--json"])
+        .expect("auth doctor --validate --json must parse");
 
     // Fix: custom OpenAI-compatible endpoint via provider add + key on stdin.
     Args::try_parse_from([

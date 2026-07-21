@@ -1,9 +1,9 @@
 {
-  "total": 1424,
+  "total": 1409,
   "totals_by_pattern": {
-    "dot_ok": 508,
-    "let_underscore": 613,
-    "unwrap_or_default": 303
+    "dot_ok": 504,
+    "let_underscore": 611,
+    "unwrap_or_default": 294
   },
   "tracked_files": {
     "crates/jcode-app-core/src/agent.rs": {
@@ -935,21 +935,6 @@
       "dot_ok": 3,
       "let_underscore": 1,
       "unwrap_or_default": 0
-    },
-    "crates/jcode-provider-doctor/src/lifecycle_driver.rs": {
-      "dot_ok": 1,
-      "let_underscore": 0,
-      "unwrap_or_default": 0
-    },
-    "crates/jcode-provider-doctor/src/live_provider_probes.rs": {
-      "dot_ok": 2,
-      "let_underscore": 0,
-      "unwrap_or_default": 7
-    },
-    "crates/jcode-provider-doctor/src/provider_e2e.rs": {
-      "dot_ok": 1,
-      "let_underscore": 2,
-      "unwrap_or_default": 2
     },
     "crates/jcode-provider-env/src/lib.rs": {
       "dot_ok": 4,

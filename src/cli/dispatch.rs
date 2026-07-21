@@ -235,93 +235,6 @@ pub(crate) async fn run_main(mut args: Args) -> Result<()> {
                     .await?;
             }
         },
-        Some(Command::ProviderTestCoverage {
-            provider_query,
-            model_query,
-            coverage_file,
-            coverage_limit,
-        }) => {
-            let coverage_path = coverage_file.as_deref().map(std::path::Path::new);
-            let colorize = std::io::stdout().is_terminal()
-                && std::env::var_os("NO_COLOR").is_none()
-                && std::env::var_os("JCODE_NO_COLOR").is_none();
-            if let Some(provider) = provider_query {
-                let model = model_query
-                    .or_else(|| args.model.clone())
-                    .unwrap_or_else(|| "*".to_string());
-                let report = crate::live_tests::format_provider_test_coverage_report(
-                    &provider,
-                    &model,
-                    coverage_path,
-                );
-                print_provider_test_coverage_report(&report, colorize);
-            } else {
-                let (coverage, path) = crate::live_tests::load_coverage(coverage_path)?;
-                let summary = crate::live_tests::strict_live_provider_model_coverage_summary(
-                    &coverage,
-                    path.display().to_string(),
-                );
-                let report = crate::live_tests::format_strict_live_provider_model_coverage_summary(
-                    &summary,
-                    coverage_limit,
-                );
-                print_provider_test_coverage_report(&report, colorize);
-            }
-        }
-        Some(Command::ProviderDoctor {
-            provider,
-            tier,
-            json,
-        }) => {
-            crate::cli::provider_doctor::run_provider_doctor_command(
-                &provider,
-                args.model.as_deref(),
-                &tier,
-                json,
-            )
-            .await?;
-        }
-        Some(Command::AuthTest {
-            all_configured,
-            no_smoke,
-            no_tool_smoke,
-            prompt,
-            json,
-            output,
-            coverage,
-            context_audit,
-            coverage_file,
-            coverage_limit,
-        }) => {
-            if coverage {
-                commands::run_auth_test_coverage_command(
-                    json,
-                    output.as_deref(),
-                    coverage_file.as_deref(),
-                    coverage_limit,
-                )?;
-            } else if context_audit {
-                commands::run_auth_test_context_audit_command(
-                    &args.provider,
-                    all_configured,
-                    json,
-                    output.as_deref(),
-                )
-                .await?;
-            } else {
-                commands::run_auth_test_command(
-                    &args.provider,
-                    args.model.as_deref(),
-                    all_configured,
-                    no_smoke,
-                    no_tool_smoke,
-                    prompt.as_deref(),
-                    json,
-                    output.as_deref(),
-                )
-                .await?;
-            }
-        }
         None => run_default_command(args).await?,
     }
 
@@ -400,17 +313,6 @@ async fn run_default_command(args: Args) -> Result<()> {
     command.print_help()?;
     println!();
     anyhow::bail!("a command is required in headless mode")
-}
-
-fn print_provider_test_coverage_report(report: &str, colorize: bool) {
-    if colorize {
-        print!(
-            "{}",
-            crate::live_tests::colorize_provider_test_coverage_output(report)
-        );
-    } else {
-        print!("{}", report);
-    }
 }
 
 #[cfg(test)]

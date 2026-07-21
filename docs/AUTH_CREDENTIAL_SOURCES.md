@@ -74,7 +74,7 @@ strings by hand; go through `AuthRoute`.
 ## Why "expired" was misleading: validation cache is not live state
 
 `~/.jcode/auth-validation.json` caches the result of the **last** runtime
-auth-test per provider. It is a historical record, not the current credential
+credential validation per provider. It is a historical record, not the current credential
 state. An OAuth token that has since auto-refreshed can still show a days-old
 "validation failed / expired" entry here.
 
@@ -84,7 +84,7 @@ To avoid presenting stale records as current fact, `format_record_label`
 stale record as "unknown, re-check", never as ground truth. Re-validate with:
 
 ```sh
-jcode auth-test --provider <id>
+jcode auth doctor <id> --validate
 ```
 
 ## Quick decision tree for "is provider X authenticated?"
@@ -94,7 +94,7 @@ jcode auth-test --provider <id>
 2. If you must inspect files: OAuth → `~/.jcode/auth.json` (and external imports);
    API key → `ANTHROPIC_API_KEY` env or `~/.config/jcode/<provider>.env`.
 3. Ignore `auth-validation.json` verdicts older than 7 days (shown as `stale`);
-   re-run `jcode auth-test` instead.
+   re-run `jcode auth doctor --validate` instead.
 
 ## Importing credentials from other agent tools
 

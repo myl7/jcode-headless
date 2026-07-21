@@ -12,11 +12,7 @@ mod report_info;
 
 #[cfg(test)]
 pub(crate) use super::auth_test::{
-    AuthTestChoicePlan, AuthTestTarget, ResolvedAuthTestTarget, auth_test_choice_plan,
-    auth_test_error_is_retryable, configured_auth_test_targets, resolve_auth_test_targets,
-};
-pub use super::auth_test::{
-    run_auth_test_command, run_auth_test_context_audit_command, run_auth_test_coverage_command,
+    AuthTestChoicePlan, auth_test_choice_plan, auth_test_error_is_retryable,
 };
 pub(crate) use provider_setup::{ProviderAddOptions, run_provider_add_command};
 

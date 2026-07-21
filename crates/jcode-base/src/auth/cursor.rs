@@ -597,7 +597,7 @@ async fn refresh_direct_access_token(
             .context("Failed to decode Cursor token refresh response")?;
         if parsed.should_logout || parsed.access_token.trim().is_empty() {
             anyhow::bail!(
-                "Cursor refresh token was rejected. Replace the mounted Cursor credential, then retry auth-test."
+                "Cursor refresh token was rejected. Replace the mounted Cursor credential, then re-validate with `jcode auth doctor --validate`."
             );
         }
         Ok(CursorDirectTokens {

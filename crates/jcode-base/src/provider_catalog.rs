@@ -847,7 +847,7 @@ pub fn openai_compatible_profile_is_configured(profile: OpenAiCompatibleProfile)
     // When a named config profile (`[providers.<name>]`, selected via
     // `--provider-profile`) is active, its credentials live under the runtime
     // env vars set by `apply_named_provider_profile_env`, not the built-in
-    // `openai-compatible.env`. Honor those first so auth-test does not report a
+    // `openai-compatible.env`. Honor those first so credential validation does not report a
     // false `not_configured` for a correctly-configured named profile (#402).
     if let Some(configured) = active_named_provider_profile_is_configured() {
         return configured;

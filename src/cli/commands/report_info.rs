@@ -347,7 +347,7 @@ async fn run_auth_doctor_validation(
         Ok(Ok(())) => "validation passed".to_string(),
         Ok(Err(err)) => err.to_string(),
         Err(_) => format!(
-            "validation timed out after {}s; run `jcode auth-test --provider {}` for detailed output",
+            "validation timed out after {}s; run `jcode auth doctor {} --validate` for detailed output",
             AUTH_DOCTOR_VALIDATION_TIMEOUT_SECS, provider.id
         ),
     }
@@ -759,7 +759,7 @@ mod tests {
                 .iter()
                 .any(|line| {
                     line == &format!(
-                        "Run runtime verification: jcode auth-test --provider {}",
+                        "Run runtime verification: jcode auth doctor {} --validate",
                         provider.id
                     )
                 })

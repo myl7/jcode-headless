@@ -1,16 +1,3 @@
-#[expect(
-    clippy::large_enum_variant,
-    reason = "Generic auth-test targets carry provider descriptors until this CLI path is refactored"
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ResolvedAuthTestTarget {
-    Detailed(AuthTestTarget),
-    Generic {
-        provider: crate::provider_catalog::LoginProviderDescriptor,
-        choice: super::provider_init::ProviderChoice,
-    },
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AuthTestTarget {
     Claude,
@@ -175,25 +162,6 @@ struct AuthTestProviderReport {
     success: bool,
 }
 
-#[derive(Debug, Serialize)]
-struct AuthTestContextModelReport {
-    model: String,
-    catalog_context_window: usize,
-    resolved_context_window: usize,
-    ok: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct AuthTestContextAuditReport {
-    provider: String,
-    display_name: String,
-    checked_models: usize,
-    skipped_models_without_context: usize,
-    mismatches: Vec<AuthTestContextModelReport>,
-    success: bool,
-    detail: String,
-}
-
 impl AuthTestProviderReport {
     fn new(target: AuthTestTarget) -> Self {
         Self {
@@ -226,27 +194,6 @@ impl AuthTestProviderReport {
             ok,
             detail: detail.into(),
         });
-    }
-}
-
-impl ResolvedAuthTestTarget {
-    fn from_choice(choice: &super::provider_init::ProviderChoice) -> Option<Self> {
-        let provider = super::provider_init::login_provider_for_choice(choice)?;
-        Some(match AuthTestTarget::from_provider_choice(choice) {
-            Some(target) => Self::Detailed(target),
-            None => Self::Generic {
-                provider,
-                choice: *choice,
-            },
-        })
-    }
-
-    fn from_provider(provider: crate::provider_catalog::LoginProviderDescriptor) -> Option<Self> {
-        let choice = super::provider_init::choice_for_login_provider(provider)?;
-        Some(match AuthTestTarget::from_provider_choice(&choice) {
-            Some(target) => Self::Detailed(target),
-            None => Self::Generic { provider, choice },
-        })
     }
 }
 

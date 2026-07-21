@@ -39,7 +39,6 @@ pub mod goal;
 pub mod hooks;
 pub mod id;
 pub mod import;
-pub mod live_tests;
 pub mod logging;
 pub mod mcp;
 pub mod memory;

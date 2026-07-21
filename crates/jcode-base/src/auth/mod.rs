@@ -926,7 +926,7 @@ fn probe_openai_status(status: &mut AuthStatus) {
 }
 
 fn probe_copilot_status(status: &mut AuthStatus) {
-    // If auth-test recently proved that the local Copilot OAuth token cannot
+    // If credential validation recently proved that the local Copilot OAuth token cannot
     // be exchanged, keep it visible as expired for diagnostics but do not let
     // startup/default-provider selection treat it as a usable API token.
     let (copilot_state, copilot_has_api_token) = copilot_auth_state_from_credentials();

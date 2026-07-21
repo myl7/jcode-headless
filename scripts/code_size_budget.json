@@ -1,8 +1,8 @@
 {
   "threshold_loc": 1200,
   "tracked_files": {
-    "crates/jcode-app-core/src/agent/turn_streaming_mpsc.rs": 1673,
-    "crates/jcode-app-core/src/server.rs": 2041,
+    "crates/jcode-app-core/src/agent/turn_streaming_mpsc.rs": 1674,
+    "crates/jcode-app-core/src/server.rs": 2039,
     "crates/jcode-app-core/src/server/client_lifecycle.rs": 3039,
     "crates/jcode-app-core/src/server/client_session.rs": 1372,
     "crates/jcode-app-core/src/server/comm_control.rs": 2625,
@@ -11,10 +11,10 @@
     "crates/jcode-app-core/src/server/swarm.rs": 3170,
     "crates/jcode-app-core/src/tool/bash.rs": 1233,
     "crates/jcode-app-core/src/tool/communicate.rs": 3347,
-    "crates/jcode-app-core/src/tool/session_search.rs": 1875,
+    "crates/jcode-app-core/src/tool/session_search.rs": 1873,
     "crates/jcode-base/src/auth/lifecycle.rs": 2609,
     "crates/jcode-base/src/auth/mod.rs": 1432,
-    "crates/jcode-base/src/background.rs": 1388,
+    "crates/jcode-base/src/background.rs": 1387,
     "crates/jcode-base/src/compaction.rs": 1790,
     "crates/jcode-base/src/import.rs": 1494,
     "crates/jcode-base/src/memory.rs": 2065,
@@ -30,13 +30,10 @@
     "crates/jcode-provider-anthropic-runtime/src/lib.rs": 2450,
     "crates/jcode-provider-bedrock/src/lib.rs": 1983,
     "crates/jcode-provider-core/src/lib.rs": 1641,
-    "crates/jcode-provider-doctor/src/lifecycle_driver.rs": 1974,
-    "crates/jcode-provider-doctor/src/live_provider_probes.rs": 2029,
-    "crates/jcode-provider-doctor/src/provider_e2e.rs": 2701,
     "crates/jcode-provider-openai-runtime/src/lib.rs": 1323,
     "crates/jcode-provider-openai-runtime/src/openai_stream_runtime.rs": 1649,
     "crates/jcode-provider-openrouter-runtime/src/lib.rs": 2756,
-    "src/cli/commands.rs": 1321
+    "src/cli/commands.rs": 1317
   },
   "version": 1
 }

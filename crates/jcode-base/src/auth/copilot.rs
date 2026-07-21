@@ -212,7 +212,7 @@ fn copilot_env_token_present() -> bool {
         })
 }
 
-/// Return true when a recent `auth-test` proved the discovered Copilot token is
+/// Return true when a recent credential validation proved the discovered Copilot token is
 /// not exchangeable for a Copilot API token.
 ///
 /// Copilot is unusual because a local GitHub OAuth token can exist while the
