@@ -21,14 +21,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-        with:
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
-          submodules: recursive
-
-      - name: Configure SSH for cargo git dependencies
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -122,14 +114,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
-          submodules: recursive
-
-      - name: Configure SSH for cargo git dependencies
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
