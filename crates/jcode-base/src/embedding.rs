@@ -399,8 +399,17 @@ pub fn find_similar(
 }
 
 /// Get the models directory path.
+///
+/// Defaults to `<jcode_dir>/models/<MODEL_NAME>`. Set `JCODE_MODELS_DIR` to a
+/// path to override the parent (the `<MODEL_NAME>` subdir is still appended).
+/// This lets a container bake the model into a read-only image path outside the
+/// writable state volume, so it is never downloaded at runtime.
 pub fn models_dir() -> Result<PathBuf> {
-    let dir = jcode_dir()?.join("models").join(backend::MODEL_NAME);
+    let base = match std::env::var_os("JCODE_MODELS_DIR") {
+        Some(value) if !value.is_empty() => PathBuf::from(value),
+        _ => jcode_dir()?.join("models"),
+    };
+    let dir = base.join(backend::MODEL_NAME);
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

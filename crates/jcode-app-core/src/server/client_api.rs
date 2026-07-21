@@ -57,6 +57,20 @@ impl Client {
         Ok(id)
     }
 
+    /// Set the active model on the subscribed session.
+    pub async fn set_model(&mut self, model: &str) -> Result<u64> {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        let request = Request::SetModel {
+            id,
+            model: model.to_string(),
+        };
+        let json = serde_json::to_string(&request)? + "\n";
+        self.writer.write_all(json.as_bytes()).await?;
+        Ok(id)
+    }
+
     /// Subscribe to events
     pub async fn subscribe(&mut self) -> Result<u64> {
         self.subscribe_with_info(None, None, false, false).await

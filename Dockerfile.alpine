@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1.7
+#
+# Alpine/musl variant of the jcode runtime image. Produces a smaller image than
+# the Debian build, at the cost of a musl static build (see risk notes below).
+#
+#   docker build -f Dockerfile.alpine -t jcode:alpine .
+#
+# Same feature switch as the Debian image:
+#   docker build -f Dockerfile.alpine --build-arg JCODE_FEATURES=minimal -t jcode:alpine-slim .
+#
+# NOTE: this musl build has not been build-verified in this environment. The two
+# most likely failure points are the C dependencies compiled from source under
+# musl: aws-lc-sys (rustls' aws_lc_rs crypto backend) and onig_sys (the
+# tokenizers `onig` feature). Both need the C toolchain + cmake installed below.
+# If aws-lc-sys fails on musl, the fallback is a Debian image or switching the
+# rustls backend to `ring` (a Cargo change, out of scope here).
+
+FROM rust:alpine AS builder
+
+ARG JCODE_FEATURES=""
+
+# build-base+clang: C compiler for aws-lc-sys / onig_sys. cmake: aws-lc-sys.
+# nasm: aws-lc x86_64 asm. perl+linux-headers: aws-lc build scripts. No
+# openssl-dev needed: the tree has no openssl-sys/libgit2 (aws-lc bundles its
+# own crypto).
+RUN apk add --no-cache build-base clang cmake make nasm perl linux-headers pkgconf git
+
+WORKDIR /src
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target,sharing=locked \
+    set -eux; \
+    case "$JCODE_FEATURES" in \
+      "")        cargo build --locked --release --bin jcode ;; \
+      "minimal") cargo build --locked --release --no-default-features --bin jcode ;; \
+      *)         cargo build --locked --release --no-default-features --features "$JCODE_FEATURES" --bin jcode ;; \
+    esac; \
+    strip target/release/jcode; \
+    cp target/release/jcode /usr/local/bin/jcode
+
+# Pre-fetch the embedding model (baked into the image, never downloaded at
+# runtime). See the Debian Dockerfile for details.
+FROM alpine:3.20 AS model
+ARG MINILM_BASE=https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main
+RUN apk add --no-cache ca-certificates curl \
+    && mkdir -p /models/all-MiniLM-L6-v2 \
+    && curl -fSL "${MINILM_BASE}/onnx/model.onnx" -o /models/all-MiniLM-L6-v2/model.onnx \
+    && curl -fSL "${MINILM_BASE}/tokenizer.json" -o /models/all-MiniLM-L6-v2/tokenizer.json
+
+FROM alpine:3.20 AS runtime
+
+LABEL org.opencontainers.image.title="jcode" \
+      org.opencontainers.image.description="Headless coding-agent runtime with multi-model and swarm coordination" \
+      org.opencontainers.image.source="https://github.com/anthropics/jcode"
+
+# tini lives at /sbin/tini on Alpine. bash so the jcode user has a real shell
+# and agent tool commands that assume bash work.
+RUN apk add --no-cache bash ca-certificates git openssh-client ripgrep iproute2 tini \
+    && adduser -D -u 10001 -s /bin/bash jcode \
+    && mkdir -p /var/lib/jcode /workspace \
+    && chown jcode:jcode /var/lib/jcode /workspace
+
+COPY --from=builder /usr/local/bin/jcode /usr/local/bin/jcode
+COPY --from=model /models /opt/jcode/models
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+USER jcode
+WORKDIR /workspace
+ENV JCODE_HOME=/var/lib/jcode \
+    JCODE_MODELS_DIR=/opt/jcode/models \
+    JCODE_NON_INTERACTIVE=1 \
+    RUST_BACKTRACE=1
+
+VOLUME ["/var/lib/jcode"]
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD jcode debug list | grep -q 'running, debug' || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["serve", "--server-name", "docker"]

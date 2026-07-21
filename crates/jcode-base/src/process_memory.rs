@@ -315,7 +315,7 @@ pub fn purge_allocator() -> Result<AllocatorTuningInfo> {
         }))
     }
 
-    #[cfg(all(target_os = "linux", not(feature = "jemalloc")))]
+    #[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
     {
         // glibc has no arena purge API, but malloc_trim(0) walks all arenas
         // and returns freed pages to the OS (MADV_DONTNEED), which is the
@@ -328,7 +328,12 @@ pub fn purge_allocator() -> Result<AllocatorTuningInfo> {
         })
     }
 
-    #[cfg(all(not(target_os = "linux"), not(feature = "jemalloc")))]
+    // musl (and every non-Linux target) has no glibc malloc_trim; treat purge as
+    // unavailable there.
+    #[cfg(all(
+        not(all(target_os = "linux", target_env = "gnu")),
+        not(feature = "jemalloc")
+    ))]
     {
         logging::warn("allocator purge requested but no purge mechanism is available");
         Err(anyhow!(
@@ -489,7 +494,7 @@ pub fn release_retained_heap(reason: &str) {
         }
     }
 
-    #[cfg(all(target_os = "linux", not(feature = "jemalloc")))]
+    #[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
     {
         unsafe extern "C" {
             fn malloc_trim(pad: usize) -> i32;
@@ -505,7 +510,11 @@ pub fn release_retained_heap(reason: &str) {
         ));
     }
 
-    #[cfg(all(not(target_os = "linux"), not(feature = "jemalloc")))]
+    // musl has no malloc_trim; nothing to do (same as non-Linux).
+    #[cfg(all(
+        not(all(target_os = "linux", target_env = "gnu")),
+        not(feature = "jemalloc")
+    ))]
     {
         let _ = reason;
     }

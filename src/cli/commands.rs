@@ -440,6 +440,27 @@ pub async fn run_single_message_command(
     emit_json: bool,
     emit_ndjson: bool,
 ) -> Result<()> {
+    // When running inside a server-backed deployment (the container entrypoint
+    // sets JCODE_RUN_ATTACH_SERVER=1 after starting `jcode serve`), route the
+    // turn through the daemon so server-only features such as swarm
+    // coordination are available. Falls back to the in-process path below when
+    // no server is reachable.
+    if run_attach_server_enabled() {
+        match try_run_single_message_via_server(
+            model,
+            resume_session,
+            message,
+            emit_json,
+            emit_ndjson,
+        )
+        .await
+        {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(err) => return Err(err),
+        }
+    }
+
     let provider = if emit_json || emit_ndjson {
         super::provider_init::init_provider_quiet(choice, model).await?
     } else {
@@ -791,6 +812,142 @@ async fn run_single_message_command_capture_with_auto_poke(
         }
     }
     Ok(outputs.join("\n\n"))
+}
+
+/// Whether `jcode run` should attach to a running server instead of building an
+/// in-process agent. Off by default; the container entrypoint enables it.
+fn run_attach_server_enabled() -> bool {
+    std::env::var("JCODE_RUN_ATTACH_SERVER")
+        .ok()
+        .map(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            !matches!(value.as_str(), "" | "0" | "false" | "off" | "no")
+        })
+        .unwrap_or(false)
+}
+
+/// Run a single message through a live `jcode serve` daemon so server-only
+/// features (notably swarm coordination) are available to the turn.
+///
+/// Returns `Ok(true)` when the turn was handled by the server, `Ok(false)` when
+/// no server was reachable (caller falls back to the in-process path), or `Err`
+/// on a turn failure reported by the server.
+async fn try_run_single_message_via_server(
+    model: Option<&str>,
+    resume_session: Option<&str>,
+    message: &str,
+    emit_json: bool,
+    emit_ndjson: bool,
+) -> Result<bool> {
+    use crate::protocol::ServerEvent;
+
+    // Resume restores session state from disk and already works in-process; keep
+    // the daemon path focused on the common fresh-turn case.
+    if resume_session.is_some() {
+        return Ok(false);
+    }
+
+    let mut client = match crate::server::Client::connect().await {
+        Ok(client) => client,
+        Err(err) => {
+            eprintln!("jcode run: no server to attach to ({err:#}); running in-process");
+            return Ok(false);
+        }
+    };
+
+    client.subscribe().await?;
+    if let Some(model) = model {
+        client.set_model(model).await?;
+    }
+    let message_id = client.send_message(message).await?;
+
+    let mut stdout = std::io::stdout().lock();
+    let mut state = NdjsonRunState::default();
+    if emit_ndjson {
+        write_json_line(&mut stdout, &serde_json::json!({ "type": "start" }))?;
+    }
+
+    let turn: Result<()> = loop {
+        let event = client.read_event().await?;
+        match &event {
+            ServerEvent::Done { id } if *id == message_id => break Ok(()),
+            ServerEvent::Error { id, message, .. } if *id == message_id => {
+                break Err(anyhow::anyhow!("{message}"));
+            }
+            _ => {}
+        }
+        if emit_ndjson {
+            emit_ndjson_event(&mut stdout, &mut state, event)?;
+        } else {
+            if let ServerEvent::TextDelta { text } = &event {
+                print!("{text}");
+                stdout.flush()?;
+            }
+            apply_server_event_to_state(&mut state, &event);
+        }
+    };
+
+    match turn {
+        Ok(()) => {
+            if emit_json {
+                let report = RunCommandReport {
+                    session_id: state.session_id.clone().unwrap_or_default(),
+                    provider: state
+                        .upstream_provider
+                        .clone()
+                        .unwrap_or_else(|| "server".to_string()),
+                    model: model.map(str::to_string).unwrap_or_default(),
+                    text: state.text.clone(),
+                    usage: state.usage.clone(),
+                };
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else if emit_ndjson {
+                write_json_line(
+                    &mut stdout,
+                    &serde_json::json!({
+                        "type": "done",
+                        "session_id": state.session_id,
+                        "text": state.text,
+                        "usage": state.usage,
+                        "upstream_provider": state.upstream_provider,
+                    }),
+                )?;
+            } else {
+                // Terminate the streamed plain text with a newline.
+                println!();
+            }
+            Ok(true)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// Accumulate the fields of a server event we report at the end of a turn,
+/// without emitting anything (used by the plain and JSON daemon paths).
+fn apply_server_event_to_state(state: &mut NdjsonRunState, event: &crate::protocol::ServerEvent) {
+    use crate::protocol::ServerEvent;
+    match event {
+        ServerEvent::TextDelta { text } => state.text.push_str(text),
+        ServerEvent::TextReplace { text } => state.text = text.clone(),
+        ServerEvent::TokenUsage {
+            input,
+            output,
+            cache_read_input,
+            cache_creation_input,
+        } => {
+            state.usage = crate::agent::TokenUsage {
+                input_tokens: *input,
+                output_tokens: *output,
+                cache_read_input_tokens: *cache_read_input,
+                cache_creation_input_tokens: *cache_creation_input,
+            };
+        }
+        ServerEvent::SessionId { session_id } => state.session_id = Some(session_id.clone()),
+        ServerEvent::UpstreamProvider { provider } => {
+            state.upstream_provider = Some(provider.clone())
+        }
+        _ => {}
+    }
 }
 
 fn restore_agent_session_if_requested(
